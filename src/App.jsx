@@ -867,7 +867,7 @@ const OilExplorationSimulation = () => {
       met: missing.length === 0,
       missing,
       recommended: missingRecommended,
-      requiresSignatures: gateReqs.minimumSignatures
+      requiresSignatures: Math.min(gateReqs.minimumSignatures, teamComposition.length)
     };
   };
   
