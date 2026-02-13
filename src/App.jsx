@@ -859,6 +859,8 @@ const OilExplorationSimulation = () => {
   const [wellTestType, setWellTestType] = useState(null);
   const [riskAssessment, setRiskAssessment] = useState(null); // participant risk assessment on Q3
   const [additionalStudy, setAdditionalStudy] = useState(false); // additional seismic processing
+  const [drillingInProgress, setDrillingInProgress] = useState(null); // null | {type, message, progress}
+  const [dryHoleHistory, setDryHoleHistory] = useState([]); // [{attempt, type, cost, result, timestamp}]
   
   // Financial
   const [budget, setBudget] = useState(100000000);
@@ -1534,67 +1536,84 @@ const OilExplorationSimulation = () => {
       return;
     }
 
-    setBudget(prev => prev - cost);
-    setTotalSpent(prev => prev + cost);
+    // Start drilling animation
+    setDrillingInProgress({ type: 'solo', message: 'Drilling exploration well...', progress: 0 });
 
-    // Slightly lower probability — already missed once on this lease
-    let prob = (projectData.probabilityOfSuccess || 0.20) * 0.85;
-    if (hasRole('geologist')) {
-      prob += getRoleBonus('probabilityBoost');
-      prob = Math.min(0.95, prob);
-    }
+    // Animate progress over 3 seconds
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      setDrillingInProgress(prev => prev ? { ...prev, progress: Math.min(step * 10, 90), message: step < 4 ? 'Setting up rig...' : step < 7 ? 'Drilling in progress...' : 'Analyzing core samples...' } : prev);
+    }, 300);
 
-    const success = Math.random() < prob;
+    setTimeout(() => {
+      clearInterval(interval);
+      setDrillingInProgress(prev => prev ? { ...prev, progress: 100, message: 'Evaluating results...' } : prev);
 
-    if (success) {
-      const geo = getGeoCharacteristics();
-      const minReserves = geo ? geo.reserveRangeMin : 10000000;
-      const maxReserves = geo ? geo.reserveRangeMax : 60000000;
-      let reserves = Math.floor(Math.random() * (maxReserves - minReserves) + minReserves);
+      setTimeout(() => {
+        setBudget(prev => prev - cost);
+        setTotalSpent(prev => prev + cost);
 
-      if (hasRole('geologist')) {
-        const accuracyBonus = getRoleBonus('reserveAccuracy');
-        const variation = (1 - accuracyBonus) * 0.3;
-        reserves = reserves * (1 + (Math.random() * variation * 2 - variation));
-      }
+        let prob = (projectData.probabilityOfSuccess || 0.20) * 0.85;
+        if (hasRole('geologist')) {
+          prob += getRoleBonus('probabilityBoost');
+          prob = Math.min(0.95, prob);
+        }
 
-      let quality = 'medium';
-      if (geo && geo.oilQualityWeights) {
-        const rand = Math.random();
-        const weights = geo.oilQualityWeights;
-        if (rand < weights.heavy) quality = 'heavy';
-        else if (rand < weights.heavy + weights.medium) quality = 'medium';
-        else quality = 'light';
-      }
+        const success = Math.random() < prob;
 
-      setProjectData(prev => ({
-        ...prev,
-        oilDiscovered: true,
-        reserveEstimate: Math.floor(reserves),
-        oilQuality: quality
-      }));
-      setWells(prev => ({ ...prev, exploration: prev.exploration + 1, successful: prev.successful + 1 }));
+        if (success) {
+          const geo = getGeoCharacteristics();
+          const minReserves = geo ? geo.reserveRangeMin : 10000000;
+          const maxReserves = geo ? geo.reserveRangeMax : 60000000;
+          let reserves = Math.floor(Math.random() * (maxReserves - minReserves) + minReserves);
 
-      addNotification(`OIL DISCOVERED on second attempt! Estimated ${(reserves/1e6).toFixed(1)}M barrels of ${quality} crude`, 'success');
-      setGameState('playing');
-      // Move to appraisal phase activities
-      setCurrentQuarterIndex(4); // H1_Y2 — appraisal activities
-      setShowDecisionGate(false);
-    } else {
-      setWells(prev => ({ ...prev, exploration: prev.exploration + 1, dry: prev.dry + 1 }));
-      addNotification('Second well also dry. Consider changing strategy.', 'warning');
-      // Stay in dry_hole state — can try again or give up
-    }
+          if (hasRole('geologist')) {
+            const accuracyBonus = getRoleBonus('reserveAccuracy');
+            const variation = (1 - accuracyBonus) * 0.3;
+            reserves = reserves * (1 + (Math.random() * variation * 2 - variation));
+          }
 
-    logDecision(
-      'Drill Another Well (Same Lease)',
-      cost,
-      success ? 'Oil Discovered!' : 'Dry Hole',
-      'Re-drill risk on existing lease'
-    );
+          let quality = 'medium';
+          if (geo && geo.oilQualityWeights) {
+            const rand = Math.random();
+            const weights = geo.oilQualityWeights;
+            if (rand < weights.heavy) quality = 'heavy';
+            else if (rand < weights.heavy + weights.medium) quality = 'medium';
+            else quality = 'light';
+          }
+
+          setProjectData(prev => ({
+            ...prev,
+            oilDiscovered: true,
+            reserveEstimate: Math.floor(reserves),
+            oilQuality: quality
+          }));
+          setWells(prev => ({ ...prev, exploration: prev.exploration + 1, successful: prev.successful + 1 }));
+          setDryHoleHistory(prev => [...prev, { attempt: prev.length + 1, type: 'Solo Drill', cost, result: 'OIL FOUND', success: true }]);
+          addNotification(`OIL DISCOVERED on re-drill! Estimated ${(reserves/1e6).toFixed(1)}M barrels of ${quality} crude`, 'success');
+          setGameState('playing');
+          setCurrentQuarterIndex(4);
+          setShowDecisionGate(false);
+        } else {
+          setWells(prev => ({ ...prev, exploration: prev.exploration + 1, dry: prev.dry + 1 }));
+          setDryHoleHistory(prev => [...prev, { attempt: prev.length + 1, type: 'Solo Drill', cost, result: 'DRY HOLE', success: false }]);
+          addNotification('Well was dry. Consider a different strategy.', 'warning');
+        }
+
+        logDecision(
+          'Drill Another Well (Same Lease)',
+          cost,
+          success ? 'Oil Discovered!' : 'Dry Hole',
+          'Re-drill risk on existing lease'
+        );
+
+        setDrillingInProgress(null);
+      }, 500);
+    }, 3000);
   };
 
-  // Option 2: Move to a new geological area
+    // Option 2: Move to a new geological area
   const relocateExploration = (newGeoType) => {
     const geo = GEOLOGICAL_CHARACTERISTICS[newGeoType];
     const relocationCost = applyGeoCost(COSTS.lease + COSTS.environmental + COSTS.permits, 'lease') * 0.7;
@@ -1641,70 +1660,84 @@ const OilExplorationSimulation = () => {
 
   // Option 3: Farm-out — bring a partner to share risk
   const farmOut = () => {
-    const partnerContribution = budget * 0.5; // Partner doubles your remaining budget
+    const partnerContribution = budget * 0.5;
     const drillingCost = applyGeoCost(COSTS.explorationWell, 'explorationWell');
-
-    setBudget(prev => prev + partnerContribution);
-
-    // Partner brings expertise — probability bonus
-    let prob = (projectData.probabilityOfSuccess || 0.20) * 0.9;
-    prob += 0.08; // Partner's technical expertise
-    if (hasRole('geologist')) {
-      prob += getRoleBonus('probabilityBoost');
-    }
-    prob = Math.min(0.95, prob);
-
-    // Partner pays half the well cost
     const ourCost = drillingCost * 0.5;
-    if (budget < ourCost) {
+
+    if (budget + partnerContribution < ourCost) {
       addNotification('Insufficient budget even with partner!', 'error');
       return;
     }
 
-    setBudget(prev => prev - ourCost);
-    setTotalSpent(prev => prev + ourCost);
+    // Start drilling animation
+    setDrillingInProgress({ type: 'partner', message: 'Negotiating partnership terms...', progress: 0 });
 
-    const success = Math.random() < prob;
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      setDrillingInProgress(prev => prev ? { ...prev, progress: Math.min(step * 10, 90), message: step < 3 ? 'Negotiating partnership terms...' : step < 5 ? 'Partner signed. Mobilizing rig...' : step < 8 ? 'Joint venture drilling...' : 'Analyzing results...' } : prev);
+    }, 300);
 
-    if (success) {
-      const geo = getGeoCharacteristics();
-      const minReserves = geo ? geo.reserveRangeMin : 10000000;
-      const maxReserves = geo ? geo.reserveRangeMax : 60000000;
-      // Partner takes 40% of reserves
-      let reserves = Math.floor(Math.random() * (maxReserves - minReserves) + minReserves) * 0.6;
+    setTimeout(() => {
+      clearInterval(interval);
+      setDrillingInProgress(prev => prev ? { ...prev, progress: 100, message: 'Evaluating results...' } : prev);
 
-      let quality = 'medium';
-      if (geo && geo.oilQualityWeights) {
-        const rand = Math.random();
-        const weights = geo.oilQualityWeights;
-        if (rand < weights.heavy) quality = 'heavy';
-        else if (rand < weights.heavy + weights.medium) quality = 'medium';
-        else quality = 'light';
-      }
+      setTimeout(() => {
+        setBudget(prev => prev + partnerContribution - ourCost);
+        setTotalSpent(prev => prev + ourCost);
 
-      setProjectData(prev => ({
-        ...prev,
-        oilDiscovered: true,
-        reserveEstimate: Math.floor(reserves),
-        oilQuality: quality
-      }));
-      setWells(prev => ({ ...prev, exploration: prev.exploration + 1, successful: prev.successful + 1 }));
+        let prob = (projectData.probabilityOfSuccess || 0.20) * 0.9;
+        prob += 0.08;
+        if (hasRole('geologist')) {
+          prob += getRoleBonus('probabilityBoost');
+        }
+        prob = Math.min(0.95, prob);
 
-      addNotification(`OIL DISCOVERED with partner! Your share: ${(reserves/1e6).toFixed(1)}M barrels (60/40 split)`, 'success');
-      setGameState('playing');
-      setCurrentQuarterIndex(4);
-      setShowDecisionGate(false);
-    } else {
-      setWells(prev => ({ ...prev, exploration: prev.exploration + 1, dry: prev.dry + 1 }));
-      addNotification('Joint venture well was dry. Partner absorbs shared losses.', 'warning');
-    }
+        const success = Math.random() < prob;
 
-    logDecision(
-      'Farm-Out: Joint Venture Well',
-      ourCost,
-      success ? 'Oil Discovered (60/40 split)' : 'Dry Hole (shared loss)',
-      'Shared risk with partner, reduced upside'
-    );
+        if (success) {
+          const geo = getGeoCharacteristics();
+          const minReserves = geo ? geo.reserveRangeMin : 10000000;
+          const maxReserves = geo ? geo.reserveRangeMax : 60000000;
+          let reserves = Math.floor(Math.random() * (maxReserves - minReserves) + minReserves) * 0.6;
+
+          let quality = 'medium';
+          if (geo && geo.oilQualityWeights) {
+            const rand = Math.random();
+            const weights = geo.oilQualityWeights;
+            if (rand < weights.heavy) quality = 'heavy';
+            else if (rand < weights.heavy + weights.medium) quality = 'medium';
+            else quality = 'light';
+          }
+
+          setProjectData(prev => ({
+            ...prev,
+            oilDiscovered: true,
+            reserveEstimate: Math.floor(reserves),
+            oilQuality: quality
+          }));
+          setWells(prev => ({ ...prev, exploration: prev.exploration + 1, successful: prev.successful + 1 }));
+          setDryHoleHistory(prev => [...prev, { attempt: prev.length + 1, type: 'Farm-Out', cost: ourCost, result: 'OIL FOUND (60/40)', success: true }]);
+          addNotification(`OIL DISCOVERED with partner! Your share: ${(reserves/1e6).toFixed(1)}M barrels (60/40 split)`, 'success');
+          setGameState('playing');
+          setCurrentQuarterIndex(4);
+          setShowDecisionGate(false);
+        } else {
+          setWells(prev => ({ ...prev, exploration: prev.exploration + 1, dry: prev.dry + 1 }));
+          setDryHoleHistory(prev => [...prev, { attempt: prev.length + 1, type: 'Farm-Out', cost: ourCost, result: 'DRY HOLE (shared loss)', success: false }]);
+          addNotification('Joint venture well was dry. Partner absorbs shared losses.', 'warning');
+        }
+
+        logDecision(
+          'Farm-Out: Joint Venture Well',
+          ourCost,
+          success ? 'Oil Discovered (60/40 split)' : 'Dry Hole (shared loss)',
+          'Shared risk with partner, reduced upside'
+        );
+
+        setDrillingInProgress(null);
+      }, 500);
+    }, 3500);
   };
 
   // Option 4: Abandon project entirely
@@ -3421,9 +3454,29 @@ const OilExplorationSimulation = () => {
 
         {/* Game Ended */}
 
-        {/* Dry Hole - Recovery Options */}
+                {/* Dry Hole - Recovery Options */}
         {gameState === 'dry_hole' && (
-          <div className="bg-slate-800 rounded-xl p-8 border-4 border-orange-500">
+          <div className="bg-slate-800 rounded-xl p-8 border-4 border-orange-500 relative">
+
+            {/* Drilling Animation Overlay */}
+            {drillingInProgress && (
+              <div className="absolute inset-0 bg-slate-900/90 rounded-xl flex items-center justify-center z-10">
+                <div className="text-center p-8">
+                  <div className="animate-pulse mb-6">
+                    <div className="w-20 h-20 mx-auto rounded-full border-4 border-blue-400 border-t-transparent animate-spin"></div>
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2 text-blue-300">{drillingInProgress.message}</h3>
+                  <div className="w-80 mx-auto bg-slate-700 rounded-full h-4 mt-4 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${drillingInProgress.progress}%`, background: drillingInProgress.progress < 100 ? '#3b82f6' : '#22c55e' }}
+                    />
+                  </div>
+                  <p className="text-sm text-slate-400 mt-2">{drillingInProgress.progress}% complete</p>
+                </div>
+              </div>
+            )}
+
             <div className="text-center mb-8">
               <AlertTriangle size={64} className="text-orange-400 mx-auto mb-4" />
               <h2 className="text-3xl font-bold mb-2">Dry Hole - Well Unsuccessful</h2>
@@ -3449,6 +3502,26 @@ const OilExplorationSimulation = () => {
                 </div>
               </div>
             </div>
+            {/* Drilling History Log */}
+            {dryHoleHistory.length > 0 && (
+              <div className="mb-6 bg-slate-900/50 rounded-lg p-4">
+                <h4 className="text-sm font-bold text-slate-300 mb-3">Drilling History</h4>
+                <div className="space-y-2">
+                  {dryHoleHistory.map((h, i) => (
+                    <div key={i} className={`flex items-center justify-between text-xs p-2 rounded ${h.success ? 'bg-emerald-900/30 border border-emerald-700' : 'bg-red-900/30 border border-red-700'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-300">#{h.attempt}</span>
+                        <span className="text-slate-400">{h.type}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-orange-400">${(h.cost/1e6).toFixed(1)}M</span>
+                        <span className={h.success ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>{h.result}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <h3 className="text-xl font-bold mb-4 text-center">Choose Your Strategy</h3>
 
@@ -3478,15 +3551,20 @@ const OilExplorationSimulation = () => {
                     <span className="text-red-400">High — same geological area</span>
                   </div>
                 </div>
+                {budget < applyGeoCost(COSTS.explorationWell, 'explorationWell') && (
+                  <div className="bg-red-900/30 border border-red-700 rounded-lg p-2 mb-3 text-xs text-red-300 flex items-center gap-2">
+                    <AlertTriangle size={14} />
+                    <span>Insufficient budget. Need ${(applyGeoCost(COSTS.explorationWell, 'explorationWell')/1e6).toFixed(1)}M but only ${(budget/1e6).toFixed(1)}M available.</span>
+                  </div>
+                )}
                 <button
                   onClick={drillAnotherWell}
-                  disabled={budget < applyGeoCost(COSTS.explorationWell, 'explorationWell')}
+                  disabled={budget < applyGeoCost(COSTS.explorationWell, 'explorationWell') || drillingInProgress}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
                 >
-                  Drill New Target
+                  {budget < applyGeoCost(COSTS.explorationWell, 'explorationWell') ? 'Insufficient Budget' : 'Drill New Target'}
                 </button>
               </div>
-
               {/* Option 2: Farm-out */}
               <div className="bg-slate-700/50 rounded-lg p-6 border-2 border-slate-600 hover:border-purple-500 transition-all">
                 <div className="flex items-center gap-3 mb-3">
@@ -3511,10 +3589,15 @@ const OilExplorationSimulation = () => {
                     <span>Trade-off:</span>
                     <span className="text-yellow-400">Only 60% of reserves if found</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>Bonus:</span>
+                    <span className="text-emerald-400">+8% probability (partner expertise)</span>
+                  </div>
                 </div>
                 <button
                   onClick={farmOut}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition-all"
+                  disabled={drillingInProgress}
+                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
                 >
                   Find a Partner
                 </button>
@@ -3535,21 +3618,26 @@ const OilExplorationSimulation = () => {
                     .map(([key, geo]) => {
                       const cost = (applyGeoCost(COSTS.lease + COSTS.environmental + COSTS.permits, 'lease') * 0.7 +
                                    applyGeoCost(COSTS.seismic + COSTS.dataProcessing, 'seismic') * 0.5);
+                      const canAfford = budget >= cost;
                       return (
-                        <button
-                          key={key}
-                          onClick={() => relocateExploration(key)}
-                          disabled={budget < cost}
-                          className="p-3 rounded-lg border border-slate-500 hover:border-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-left bg-slate-800"
-                        >
-                          <div className="font-bold text-sm mb-1">{geo.name}</div>
-                          <div className="text-xs text-slate-400 mb-2">
-                            P(success): {(geo.probability * 100).toFixed(0)}%
-                          </div>
-                          <div className="text-xs text-orange-400">
-                            ~${(cost/1e6).toFixed(1)}M
-                          </div>
-                        </button>
+                        <div key={key} className="relative">
+                          <button
+                            onClick={() => relocateExploration(key)}
+                            disabled={!canAfford || drillingInProgress}
+                            className="w-full p-3 rounded-lg border border-slate-500 hover:border-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-left bg-slate-800"
+                          >
+                            <div className="font-bold text-sm mb-1">{geo.name}</div>
+                            <div className="text-xs text-slate-400 mb-2">
+                              P(success): {(geo.probability * 100).toFixed(0)}%
+                            </div>
+                            <div className={`text-xs ${canAfford ? 'text-orange-400' : 'text-red-400'}`}>
+                              ~${(cost/1e6).toFixed(1)}M
+                            </div>
+                            {!canAfford && (
+                              <div className="text-xs text-red-400 mt-1 font-bold">Can't afford</div>
+                            )}
+                          </button>
+                        </div>
                       );
                     })}
                 </div>
@@ -3560,7 +3648,8 @@ const OilExplorationSimulation = () => {
             <div className="text-center pt-4 border-t border-slate-700">
               <button
                 onClick={abandonProject}
-                className="text-slate-400 hover:text-red-400 text-sm underline transition-all"
+                disabled={drillingInProgress}
+                className="text-slate-400 hover:text-red-400 text-sm underline transition-all disabled:opacity-50"
               >
                 Abandon Project Entirely (cut losses)
               </button>
