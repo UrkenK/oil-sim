@@ -807,7 +807,17 @@ const OilExplorationSimulation = () => {
       ? ` (${geo.leaseCostMultiplier}x for ${geo.name})`
       : '';
     
-    addNotification(`Lease secured and permits obtained ($${(cost/1e6).toFixed(1)}M${costNote})`, 'success');
+    addNotification(`Lease secured and permits obtained (${(cost/1e6).toFixed(1)}M${costNote})`, 'success');
+  };
+
+  const revokeLease = () => {
+    if (!projectData.leaseSecured) return;
+    const baseCost = COSTS.lease + COSTS.environmental + COSTS.permits;
+    const cost = applyGeoCost(baseCost, 'lease');
+    setBudget(prev => prev + cost);
+    setTotalSpent(prev => prev - cost);
+    setProjectData(prev => ({ ...prev, leaseSecured: false, geologicalType: null }));
+    addNotification('Lease revoked. Budget refunded. You can select a different area.', 'info');
   };
 
   const conductSeismic = (packageType) => {
@@ -1967,6 +1977,14 @@ const OilExplorationSimulation = () => {
                           >
                             {projectData.leaseSecured ? '✓ Lease Secured' : 'Secure Lease & Environmental Permits'}
                           </button>
+                          {projectData.leaseSecured && (
+                            <button
+                              onClick={revokeLease}
+                              className="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white text-sm py-2 rounded-lg transition-all border border-slate-600"
+                            >
+                              Cancel Lease & Change Area
+                            </button>
+                          )}
                         </div>
 
                         <div className="bg-orange-900/30 border border-orange-600 rounded-lg p-4 mt-4">
