@@ -750,6 +750,8 @@ const OilExplorationSimulation = () => {
   const [activeRole, setActiveRole] = useState(null); // Which role is currently making decisions
   const [roleApprovals, setRoleApprovals] = useState({}); // Track gate approvals by role
   const [selectedDrillSite, setSelectedDrillSite] = useState(null);
+  const [riskAssessment, setRiskAssessment] = useState(null); // participant risk assessment on Q3
+  const [additionalStudy, setAdditionalStudy] = useState(false); // additional seismic processing
   
   // Financial
   const [budget, setBudget] = useState(100000000);
@@ -1100,7 +1102,41 @@ const OilExplorationSimulation = () => {
     }
   };
 
-  const obtainDrillingPermit = () => {
+  // Additional seismic processing to improve confidence
+  const runAdditionalStudy = () => {
+    const cost = 2000000; // $2M for reprocessing
+    if (budget < cost) {
+      addNotification('Insufficient budget for additional study!', 'error');
+      return;
+    }
+    setBudget(prev => prev - cost);
+    setTotalSpent(prev => prev + cost);
+    setAdditionalStudy(true);
+
+    // Improve confidence levels and probability
+    setProjectData(prev => {
+      const interp = { ...prev.seismicInterpretation };
+      interp.structuralConfidence = Math.min(0.95, interp.structuralConfidence + 0.15);
+      interp.volumetricConfidence = Math.min(0.95, interp.volumetricConfidence + 0.12);
+      interp.fluidConfidence = Math.min(0.95, interp.fluidConfidence + 0.10);
+      // May reveal new DHI
+      if (!interp.dhiPresent && Math.random() < 0.3) {
+        interp.dhiPresent = true;
+        interp.dhiTypes = ['Amplitude anomaly (reprocessed)'];
+      }
+      // Remove one risk factor if any
+      if (interp.risks.length > 0) {
+        interp.risks = interp.risks.slice(1);
+      }
+      const newProb = Math.min(0.95, prev.probabilityOfSuccess + 0.05);
+      return { ...prev, seismicInterpretation: interp, probabilityOfSuccess: newProb };
+    });
+
+    addNotification('Additional seismic reprocessing complete. Confidence levels improved (+5% probability).', 'success');
+    logDecision('Additional Seismic Study', cost, 'Confidence improved', 'Reduced uncertainty');
+  };
+
+    const obtainDrillingPermit = () => {
     setProjectData(prev => ({ ...prev, drillingPermit: true }));
     addNotification('Drilling permit approved', 'success');
   };
@@ -2535,9 +2571,63 @@ const OilExplorationSimulation = () => {
                           </>
                         )}
 
+                        {/* Participant Decisions */}
+                        <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                          <h4 className="font-bold text-sm mb-3 text-purple-400">Your Analysis & Decisions</h4>
+
+                          {/* Risk Assessment */}
+                          <div className="mb-4">
+                            <div className="text-xs text-slate-400 mb-2">1. Based on the seismic report above, what is your risk assessment?</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { id: 'favorable', label: 'Favorable', desc: 'Data supports drilling', color: 'emerald' },
+                                { id: 'marginal', label: 'Marginal', desc: 'Mixed signals, proceed with caution', color: 'yellow' },
+                                { id: 'unfavorable', label: 'Unfavorable', desc: 'High risk, reconsider', color: 'red' },
+                              ].map(opt => (
+                                <button
+                                  key={opt.id}
+                                  onClick={() => setRiskAssessment(opt.id)}
+                                  className={'p-3 rounded-lg border text-xs text-left transition-all ' + (riskAssessment === opt.id ? 'border-' + opt.color + '-400 bg-' + opt.color + '-900/30' : 'border-slate-600 hover:border-slate-500')}
+                                >
+                                  <div className={'font-bold text-' + opt.color + '-400'}>{opt.label}</div>
+                                  <div className="text-slate-400 mt-1">{opt.desc}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Additional Study Option */}
+                          <div className="mb-4">
+                            <div className="text-xs text-slate-400 mb-2">2. Request additional seismic reprocessing? ($2M — improves confidence levels)</div>
+                            <button
+                              onClick={runAdditionalStudy}
+                              disabled={additionalStudy}
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white text-sm font-bold py-2 rounded-lg transition-all"
+                            >
+                              {additionalStudy ? '✓ Additional Study Complete — Confidence Improved' : 'Run Additional Seismic Reprocessing ($2M)'}
+                            </button>
+                          </div>
+
+                          {/* Geologist recommendation if on team */}
+                          {hasRole('geologist') && riskAssessment && (
+                            <div className="bg-emerald-900/20 border border-emerald-600/50 rounded-lg p-3 mb-4">
+                              <div className="text-xs font-bold text-emerald-400 mb-1">Geologist Recommendation:</div>
+                              <div className="text-xs text-slate-300">
+                                {projectData.probabilityOfSuccess > 0.25
+                                  ? 'The structural closure and reservoir indicators are promising. I recommend proceeding to drill.'
+                                  : projectData.probabilityOfSuccess > 0.15
+                                  ? 'Data is marginal. Consider additional studies or accept higher risk. The trap geometry needs further evaluation.'
+                                  : 'Significant uncertainties remain. The probability of success is low. Consider whether the potential upside justifies the drilling cost.'}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="text-xs text-slate-500 text-center">Complete your assessment, then apply for the drilling permit below.</div>
+                        </div>
+
                         <button
                           onClick={obtainDrillingPermit}
-                          disabled={projectData.drillingPermit}
+                          disabled={projectData.drillingPermit || !riskAssessment}
                           className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
                         >
                           {projectData.drillingPermit ? '✓ Drilling Permit Approved' : 'Apply for Drilling Permit'}
