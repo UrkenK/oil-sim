@@ -2548,6 +2548,7 @@ const OilExplorationSimulation = () => {
                       </div>
                       )}
                       
+                      {!selectedSeismicPkg && (
                       <div className="space-y-3">
                         <label className="block text-sm font-semibold mb-2">
                           Select Seismic Package (Higher cost = Better data quality)
@@ -2620,6 +2621,7 @@ const OilExplorationSimulation = () => {
                           );
                         })}
                       </div>
+                      )}
 
                       <button
                         onClick={advanceWithoutGate}
