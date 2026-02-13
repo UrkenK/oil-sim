@@ -1,0 +1,25 @@
+cd /c/Users/user/oil-sim && git config user.email "user@oil-sim.local" && git config user.name "User" && git add -A && git commit -m "v1: dry hole recovery, loan feature, costEstimate fix" 
+[master (root-commit) 7ac8f2a] v1: dry hole recovery, loan feature, costEstimate fix
+ 15 files changed, 6906 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 README.md
+ create mode 100644 eslint.config.js
+ create mode 100644 index.html
+ create mode 100644 launch.ps1
+ create mode 100644 package-lock.json
+ create mode 100644 package.json
+ create mode 100644 public/vite.svg
+ create mode 100644 src/App.css
+ create mode 100644 src/App.jsx
+ create mode 100644 src/assets/react.svg
+ create mode 100644 src/index.css
+ create mode 100644 src/main.jsx
+ create mode 100644 start.bat
+ create mode 100644 vite.config.js
+ 
+ git checkout -- .
+
+git log --oneline        # посмотреть список версий
+git checkout 7ac8f2a     # вернуться к этому коммиту
+
+

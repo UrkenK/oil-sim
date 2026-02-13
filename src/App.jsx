@@ -1481,6 +1481,20 @@ const OilExplorationSimulation = () => {
         {gameState === 'setup' && (
           <div className="bg-slate-800 rounded-xl p-8 shadow-2xl border border-slate-700">
             <h2 className="text-3xl font-bold mb-6 text-center">Build Your Exploration Team</h2>
+
+            {/* Educational Introduction */}
+            <div className="bg-blue-900/30 border border-blue-600 rounded-lg p-6 mb-8">
+              <h3 className="font-bold text-lg text-blue-400 mb-3">Welcome to Oil Exploration Simulator</h3>
+              <p className="text-sm text-slate-300 mb-4">You are the project manager of an oil exploration company. Your goal is to find and develop an oil field from initial geological survey to full-scale production. Every decision carries risk, and your budget of 100M dollars is limited.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center text-xs">
+                <div className="bg-slate-800/80 rounded-lg p-3 border border-emerald-600/50"><div className="text-emerald-400 font-bold mb-1">1. Exploration</div><div className="text-slate-400">Find a promising area and drill a test well</div></div>
+                <div className="bg-slate-800/80 rounded-lg p-3 border border-blue-600/50"><div className="text-blue-400 font-bold mb-1">2. Appraisal</div><div className="text-slate-400">Confirm the discovery and estimate reserves</div></div>
+                <div className="bg-slate-800/80 rounded-lg p-3 border border-orange-600/50"><div className="text-orange-400 font-bold mb-1">3. Development</div><div className="text-slate-400">Build wells and infrastructure</div></div>
+                <div className="bg-slate-800/80 rounded-lg p-3 border border-purple-600/50"><div className="text-purple-400 font-bold mb-1">4. Production</div><div className="text-slate-400">Extract oil and generate revenue</div></div>
+              </div>
+              <p className="text-xs text-slate-400 mt-3 text-center">At each stage you will face Decision Gates (FID) — critical go/no-go decisions that determine the project future.</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {ROLES.map(role => (
                 <div
@@ -1514,7 +1528,11 @@ const OilExplorationSimulation = () => {
             </div>
             
             <div className="bg-slate-900/50 p-6 rounded-lg mb-6">
-              <h3 className="text-xl font-bold mb-3">Project Parameters</h3>
+              <div className="bg-emerald-900/20 border border-emerald-600/50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-emerald-300"><span className="font-bold">Tip for beginners:</span> Select all 4 roles for maximum bonuses and the best chance of success. Advanced players can limit the team for a greater challenge.</p>
+            </div>
+
+            <h3 className="text-xl font-bold mb-3">Project Parameters</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div><span className="text-slate-400">Initial Budget:</span> <span className="font-bold text-emerald-400">$100M</span></div>
                 <div><span className="text-slate-400">Timeline:</span> <span className="font-bold text-blue-400">4+ Years</span></div>
@@ -1854,7 +1872,23 @@ const OilExplorationSimulation = () => {
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-sm font-semibold mb-2">1. Select Geological Area</label>
+                          <div className="bg-blue-900/30 border border-blue-600 rounded-lg p-4 mb-4">
+                          <p className="text-sm text-slate-300 mb-2"><span className="font-bold text-blue-400">Your first strategic decision.</span> Each geological area has a unique risk/reward profile. High probability areas have smaller reserves, while risky areas can yield massive discoveries.</p>
+                          <div className="flex items-center gap-2 text-xs mt-2">
+                            <span className="bg-emerald-600/30 text-emerald-400 px-2 py-1 rounded">Low Risk</span>
+                            <span className="text-slate-500">Proven Basin</span>
+                            <span className="text-slate-600 mx-1">&rarr;</span>
+                            <span className="text-slate-500">Frontier</span>
+                            <span className="text-slate-600 mx-1">&rarr;</span>
+                            <span className="text-slate-500">Deepwater</span>
+                            <span className="text-slate-600 mx-1">&rarr;</span>
+                            <span className="text-slate-500">Unconventional</span>
+                            <span className="bg-red-600/30 text-red-400 px-2 py-1 rounded">High Risk</span>
+                          </div>
+                          <p className="text-xs text-emerald-400 mt-2">Recommendation: Start with <span className="font-bold">Proven Basin</span> — highest success rate (40%).</p>
+                        </div>
+
+                        <label className="block text-sm font-semibold mb-2">1. Select Geological Area</label>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {Object.keys(PROBABILITIES.geological).map(type => {
                               const geo = GEOLOGICAL_CHARACTERISTICS[type];
@@ -1868,12 +1902,12 @@ const OilExplorationSimulation = () => {
                                       : 'border-slate-600 bg-slate-700 hover:border-slate-500'
                                   }`}
                                 >
-                                  <div className="font-bold text-lg mb-1">{geo.name}</div>
+                                  <div className="flex items-center justify-between mb-1"><div className="font-bold text-lg">{geo.name}</div><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${geo.probability >= 0.30 ? 'bg-emerald-600/30 text-emerald-400' : geo.probability >= 0.15 ? 'bg-yellow-600/30 text-yellow-400' : geo.probability >= 0.12 ? 'bg-orange-600/30 text-orange-400' : 'bg-red-600/30 text-red-400'}`}>{geo.probability >= 0.30 ? 'Beginner' : geo.probability >= 0.15 ? 'Moderate' : geo.probability >= 0.12 ? 'Advanced' : 'Expert'}</span></div>
                                   <div className="text-xs text-slate-400 mb-3">{geo.description}</div>
                                   
                                   <div className="space-y-1 text-xs">
                                     <div className="flex justify-between">
-                                      <span className="text-slate-400">Success Probability:</span>
+                                      <span className="text-slate-400">Success Probability <span className="text-slate-500">(chance of finding oil)</span>:</span>
                                       <span className={`font-semibold ${
                                         geo.probability >= 0.30 ? 'text-emerald-400' :
                                         geo.probability >= 0.15 ? 'text-yellow-400' :
@@ -1881,7 +1915,7 @@ const OilExplorationSimulation = () => {
                                       }`}>{(geo.probability * 100).toFixed(0)}%</span>
                                     </div>
                                     <div className="flex justify-between">
-                                      <span className="text-slate-400">Reserve Size:</span>
+                                      <span className="text-slate-400">Reserve Size <span className="text-slate-500">(potential volume)</span>:</span>
                                       <span className="font-semibold text-blue-400">
                                         {(geo.reserveRangeMin/1e6).toFixed(0)}-{(geo.reserveRangeMax/1e6).toFixed(0)}M bbl
                                       </span>
@@ -1919,7 +1953,7 @@ const OilExplorationSimulation = () => {
 
                         <div>
                           <label className="block text-sm font-semibold mb-2">
-                            2. Secure Lease & Permits
+                            2. Secure Lease & Permits <span className="text-slate-400 font-normal text-xs">(right to explore and produce in the selected area)</span>
                             {projectData.geologicalType && (
                               <span className="ml-2 text-slate-400">
                                 (Est. ${(applyGeoCost(COSTS.lease + COSTS.environmental + COSTS.permits, 'lease')/1e6).toFixed(1)}M)
