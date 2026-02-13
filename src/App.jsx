@@ -531,6 +531,48 @@ const COSTS = {
   discountRate: 0.10
 };
 
+const SEISMIC_CONTRACTORS = {
+  geoscan: {
+    name: 'GeoScan Ltd',
+    type: 'Budget',
+    badge: 'Economy',
+    badgeColor: 'bg-yellow-700 text-yellow-200',
+    description: 'Regional contractor, basic equipment. May cut corners on acquisition parameters.',
+    dailyRate: 15000,
+    mobilization: 200000,
+    qualityMod: -0.05,
+    schedule: '6 weeks',
+    risk: 'Data gaps possible, weather delays likely',
+    experience: '5 years',
+  },
+  petroserv: {
+    name: 'PetroServ International',
+    type: 'Standard',
+    badge: 'Recommended',
+    badgeColor: 'bg-blue-700 text-blue-200',
+    description: 'Established international company. Reliable data quality, good track record.',
+    dailyRate: 28000,
+    mobilization: 500000,
+    qualityMod: 0.0,
+    schedule: '5 weeks',
+    risk: 'Minor weather delays possible',
+    experience: '15 years',
+  },
+  seismictech: {
+    name: 'SeismicTech Elite',
+    type: 'Premium',
+    badge: 'Top Tier',
+    badgeColor: 'bg-purple-700 text-purple-200',
+    description: 'Industry leader. State-of-the-art vessels and processing. Highest data quality guaranteed.',
+    dailyRate: 45000,
+    mobilization: 800000,
+    qualityMod: 0.08,
+    schedule: '4 weeks',
+    risk: 'Minimal — dedicated standby equipment',
+    experience: '25+ years',
+  },
+};
+
 const DRILL_SITES = {
   A: { x: 50, y: 35, label: 'Site A — Crest of Anticline', desc: 'Top of the structure. Best trap position, highest probability.', probMod: 0.08, risk: 'Low', color: '#10b981' },
   B: { x: 35, y: 50, label: 'Site B — Western Flank', desc: 'Good structural position but near a fault. Moderate risk.', probMod: 0.02, risk: 'Medium', color: '#f59e0b' },
@@ -750,6 +792,8 @@ const OilExplorationSimulation = () => {
   const [activeRole, setActiveRole] = useState(null); // Which role is currently making decisions
   const [roleApprovals, setRoleApprovals] = useState({}); // Track gate approvals by role
   const [selectedDrillSite, setSelectedDrillSite] = useState(null);
+  const [selectedSeismicPkg, setSelectedSeismicPkg] = useState(null);
+  const [selectedContractor, setSelectedContractor] = useState(null);
   const [riskAssessment, setRiskAssessment] = useState(null); // participant risk assessment on Q3
   const [additionalStudy, setAdditionalStudy] = useState(false); // additional seismic processing
   
@@ -1058,6 +1102,10 @@ const OilExplorationSimulation = () => {
     }
     
     let seismicProb = pkg.qualityScore;
+    // Apply contractor quality modifier if selected
+    if (selectedContractor && SEISMIC_CONTRACTORS[selectedContractor]) {
+      seismicProb += SEISMIC_CONTRACTORS[selectedContractor].qualityMod;
+    }
     const geoProb = PROBABILITIES.geological[geoType] || 0;
     
     // Apply geologist bonus if on team
@@ -1388,6 +1436,16 @@ const OilExplorationSimulation = () => {
       }
     }
     
+    // Require seismic package and contractor for GATE_1
+    if (currentQuarter.gate === 'GATE_1') {
+      if (!selectedSeismicPkg) {
+        missing.push('Seismic package not selected');
+      }
+      if (!selectedContractor) {
+        missing.push('Seismic contractor not selected');
+      }
+    }
+
     // Require drill site selection for GATE_2
     if (currentQuarter.gate === 'GATE_2' && !selectedDrillSite) {
       missing.push('Drill site location not selected (use the map above)');
@@ -1633,8 +1691,12 @@ const OilExplorationSimulation = () => {
       
       // Gate-specific actions
       if (currentQuarter.gate === 'GATE_1') {
-        // Seismic survey and data processing are included in gate cost
-        addNotification('Seismic survey contract awarded', 'success');
+        if (selectedSeismicPkg) {
+          setProjectData(prev => ({ ...prev, seismicPackage: selectedSeismicPkg }));
+        }
+        const ctr = selectedContractor ? SEISMIC_CONTRACTORS[selectedContractor] : null;
+        const ctrName = ctr ? ctr.name : 'Default';
+        addNotification('Seismic survey contract awarded to ' + ctrName, 'success');
       } else if (currentQuarter.gate === 'GATE_2') {
         // Drill exploration well - cost already deducted at gate
         const drillSuccess = drillExplorationWell(true);
@@ -2127,6 +2189,106 @@ const OilExplorationSimulation = () => {
                   </div>
                 )}
 
+                {/* Seismic Package & Contractor Selection for GATE_1 */}
+                {currentQuarter.gate === "GATE_1" && (
+                  <div className="space-y-4 mb-4">
+                    {/* Seismic Package Selection */}
+                    <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-600">
+                      <h4 className="font-bold text-blue-400 mb-1">1. Select Seismic Survey Package</h4>
+                      <p className="text-xs text-slate-400 mb-3">Better data quality increases the chance of finding oil, but costs more.</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(SEISMIC_PACKAGES).map(([pkgId, pkg]) => {
+                          const totalCost = applyGeoCost(pkg.cost + pkg.processingCost, "seismic");
+                          const isSelected = selectedSeismicPkg === pkgId;
+                          return (
+                            <button key={pkgId} onClick={() => setSelectedSeismicPkg(pkgId)}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-900/30" : "border-slate-600 bg-slate-700/50 hover:border-blue-500"}`}>
+                              <div className="flex justify-between items-start">
+                                <div className="font-bold text-sm">{pkg.name}</div>
+                                <div className={`text-sm font-bold ${totalCost > 10e6 ? "text-red-400" : totalCost > 6e6 ? "text-orange-400" : "text-emerald-400"}`}>
+                                  ${(totalCost/1e6).toFixed(1)}M</div>
+                              </div>
+                              <div className="text-xs text-slate-400 mt-1">{pkg.description}</div>
+                              <div className="flex gap-2 mt-2">
+                                <span className="text-xs bg-slate-600 px-2 py-0.5 rounded">Quality: {Math.round(pkg.qualityScore*100)}%</span>
+                                <span className="text-xs bg-slate-600 px-2 py-0.5 rounded">{pkg.quality}</span>
+                              </div>
+                              {isSelected && <div className="text-xs text-emerald-400 mt-1 font-bold">Selected</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* Contractor Selection */}
+                    <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-600">
+                      <h4 className="font-bold text-blue-400 mb-1">2. Select Seismic Contractor</h4>
+                      <p className="text-xs text-slate-400 mb-3">Contractor quality affects data reliability and project timeline.</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        {Object.entries(SEISMIC_CONTRACTORS).map(([cId, ctr]) => {
+                          const isSelected = selectedContractor === cId;
+                          const totalCtrCost = ctr.mobilization + ctr.dailyRate * 35;
+                          return (
+                            <button key={cId} onClick={() => setSelectedContractor(cId)}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-900/30" : "border-slate-600 bg-slate-700/50 hover:border-blue-500"}`}>
+                              <div className="flex justify-between items-start mb-1">
+                                <div className="font-bold text-sm">{ctr.name}</div>
+                                <span className={`text-xs px-2 py-0.5 rounded ${ctr.badgeColor}`}>{ctr.badge}</span>
+                              </div>
+                              <div className="text-xs text-slate-400 mb-2">{ctr.description}</div>
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between"><span className="text-slate-500">Daily rate:</span><span>${(ctr.dailyRate/1000).toFixed(0)}K/day</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Mobilization:</span><span>${(ctr.mobilization/1e6).toFixed(1)}M</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Est. total:</span><span className="font-bold">${(totalCtrCost/1e6).toFixed(1)}M</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Schedule:</span><span>{ctr.schedule}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Experience:</span><span>{ctr.experience}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Quality mod:</span><span className={`${ctr.qualityMod > 0 ? "text-emerald-400" : ctr.qualityMod < 0 ? "text-red-400" : "text-slate-300"}`}>{ctr.qualityMod > 0 ? "+" : ""}{(ctr.qualityMod*100).toFixed(0)}%</span></div>
+                              </div>
+                              <div className="text-xs text-orange-400/80 mt-2">Risk: {ctr.risk}</div>
+                              {isSelected && <div className="text-xs text-emerald-400 mt-1 font-bold">Selected</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* Budget Impact Analysis */}
+                    {selectedSeismicPkg && selectedContractor && (
+                      <div className="bg-slate-800/80 rounded-xl p-4 border border-amber-600/50">
+                        <h4 className="font-bold text-amber-400 mb-2">3. Budget Impact Analysis</h4>
+                        {(() => {
+                          const pkg = SEISMIC_PACKAGES[selectedSeismicPkg];
+                          const ctr = SEISMIC_CONTRACTORS[selectedContractor];
+                          const seismicCost = applyGeoCost(pkg.cost + pkg.processingCost, "seismic");
+                          const contractorCost = ctr.mobilization + ctr.dailyRate * 35;
+                          const totalGateCost = seismicCost + contractorCost;
+                          const drillCost = applyGeoCost(15000000, "explorationWell");
+                          const remaining = budget - totalGateCost;
+                          const canAffordDrill = remaining >= drillCost;
+                          return (
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between"><span className="text-slate-400">Current budget:</span><span className="font-bold">${(budget/1e6).toFixed(1)}M</span></div>
+                              <div className="flex justify-between"><span className="text-slate-400">Seismic ({pkg.name}):</span><span className="text-red-400">-${(seismicCost/1e6).toFixed(1)}M</span></div>
+                              <div className="flex justify-between"><span className="text-slate-400">Contractor ({ctr.name}):</span><span className="text-red-400">-${(contractorCost/1e6).toFixed(1)}M</span></div>
+                              <div className="border-t border-slate-600 my-1"></div>
+                              <div className="flex justify-between font-bold"><span>After FID 1:</span><span className={`${remaining > 0 ? "text-emerald-400" : "text-red-400"}`}>${(remaining/1e6).toFixed(1)}M</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Est. drilling cost (next):</span><span className="text-slate-400">~${(drillCost/1e6).toFixed(1)}M</span></div>
+                              {!canAffordDrill && (
+                                <div className="bg-red-900/30 border border-red-600 rounded p-2 text-xs text-red-300 mt-1">
+                                  Warning: Remaining budget may be insufficient for exploration drilling.
+                                </div>
+                              )}
+                              {canAffordDrill && (
+                                <div className="bg-emerald-900/30 border border-emerald-600 rounded p-2 text-xs text-emerald-300 mt-1">
+                                  Budget sufficient to proceed to exploration drilling.
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Drill Site Selection for GATE_2 */}
                 {currentQuarter.gate === 'GATE_2' && (
                   <DrillSiteMap geoType={projectData.geologicalType} selected={selectedDrillSite} onSelect={setSelectedDrillSite} />
@@ -2301,6 +2463,16 @@ const OilExplorationSimulation = () => {
                     <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
                       <h3 className="text-xl font-bold mb-4">Q2 Activities: Seismic Acquisition & Processing</h3>
                       
+                      {selectedSeismicPkg && !projectData.seismicComplete && (
+                        <div className="bg-emerald-900/30 border border-emerald-600 rounded-lg p-4 mb-4">
+                          <p className="text-sm text-emerald-300 mb-2">Seismic package <strong>{SEISMIC_PACKAGES[selectedSeismicPkg]?.name}</strong> was selected at FID 1. Contractor: <strong>{selectedContractor ? SEISMIC_CONTRACTORS[selectedContractor]?.name : 'N/A'}</strong></p>
+                          <button onClick={() => conductSeismic(selectedSeismicPkg)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg text-sm">
+                            Execute Seismic Survey
+                          </button>
+                        </div>
+                      )}
+
+                      {!selectedSeismicPkg && (
                       <div className="bg-blue-900/30 border border-blue-600 rounded-lg p-4 mb-4">
                         <div className="flex items-center gap-2">
                           <FileText className="text-blue-400" />
@@ -2311,6 +2483,7 @@ const OilExplorationSimulation = () => {
                           This data will be presented to your team for analysis before drilling.
                         </p>
                       </div>
+                      )}
                       
                       <div className="space-y-3">
                         <label className="block text-sm font-semibold mb-2">
