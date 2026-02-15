@@ -1342,29 +1342,65 @@ const OilExplorationSimulation = () => {
     }
   };
 
-  const drillAppraisalWells = (count) => {
-    const cost = count * COSTS.appraisalWell;
-    if (budget < cost) {
-      addNotification('Insufficient budget!', 'error');
+  const drillAppraisalWells = () => {
+    if (!appraisalStrategy) {
+      addNotification('Please select an appraisal strategy first!', 'error');
       return;
     }
-    
-    setBudget(prev => prev - cost);
-    setTotalSpent(prev => prev + cost);
-    setWells(prev => ({ ...prev, appraisal: count }));
-    
-    // Refine reserve estimate
-    const refinement = 1 + (Math.random() * 0.4 - 0.2);
+    const strat = APPRAISAL_STRATEGIES[appraisalStrategy];
+    if (!strat) return;
+
+    let totalCost = applyGeoCost(strat.baseCost, 'appraisalWell');
+    if (strat.includesWellTest && wellTestType) {
+      totalCost += WELL_TEST_TYPES[wellTestType]?.cost || 0;
+    }
+    if (hasRole('engineer')) {
+      totalCost *= (1 - getRoleBonus('drillingCostReduction'));
+    }
+
+    if (budget < totalCost) {
+      addNotification('Insufficient budget for appraisal program!', 'error');
+      return;
+    }
+
+    setBudget(prev => prev - totalCost);
+    setTotalSpent(prev => prev + totalCost);
+    setWells(prev => ({ ...prev, appraisal: strat.wells }));
+
+    // Refine reserve estimate based on strategy uncertainty range
+    let range = strat.uncertaintyRange;
+    // Well test accuracy bonus
+    if (strat.includesWellTest && wellTestType) {
+      range -= WELL_TEST_TYPES[wellTestType]?.accuracyBonus || 0;
+      range = Math.max(0.03, range);
+    }
+    // Role bonuses
+    if (hasRole('geologist')) {
+      range *= (1 - getRoleBonus('reserveAccuracy') * 0.5);
+    }
+    if (hasRole('engineer')) {
+      range *= 0.9;
+    }
+
+    const refinement = 1 + (Math.random() * range * 2 - range);
+    const p50 = Math.floor(projectData.reserveEstimate * refinement);
+    const p10 = Math.floor(p50 * (1 - range));
+    const p90 = Math.floor(p50 * (1 + range));
+
     setProjectData(prev => ({
       ...prev,
-      reserveEstimate: Math.floor(prev.reserveEstimate * refinement),
-      appraisalComplete: true
+      reserveEstimate: p50,
+      appraisalComplete: true,
+      appraisalStrategy: appraisalStrategy,
+      appraisalWellTest: wellTestType,
+      appraisalP10: p10,
+      appraisalP50: p50,
+      appraisalP90: p90,
     }));
-    
-    addNotification(`${count} appraisal wells completed. Reserve estimate refined.`, 'success');
-  };
 
-  const approveDevelopmentPlan = (wellCount) => {
+    addNotification(`Appraisal complete: ${strat.name} (${strat.wells} wells). Reserves refined to ${(p50/1e6).toFixed(1)}M bbl (P10: ${(p10/1e6).toFixed(1)}M, P90: ${(p90/1e6).toFixed(1)}M)`, 'success');
+  };
+    const approveDevelopmentPlan = (wellCount) => {
     const devCost = wellCount * COSTS.developmentWell + COSTS.facility;
     const estimatedProd = wellCount * 2000;
     const npv = calculateNPV(projectData.reserveEstimate, wellCount, estimatedProd);
