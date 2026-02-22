@@ -1148,6 +1148,13 @@ const OilExplorationSimulation = () => {
     overallAssessment: null
   });
   const [processingWorkflow, setProcessingWorkflow] = useState(null);
+
+  // Loan decision (H1 Y3)
+  const [loanAssessment, setLoanAssessment] = useState({
+    riskAcceptance: null,    // 'accept' | 'cautious' | 'reject'
+    repaymentSource: null,   // 'production' | 'partner' | 'phased'
+    debtTolerance: null      // 'low' | 'medium' | 'high'
+  });
   
   // Financial
   const [budget, setBudget] = useState(100000000);
@@ -3961,27 +3968,41 @@ const OilExplorationSimulation = () => {
 
                       <button
                         onClick={executeDevelopment}
-                        disabled={projectData.facilitiesComplete}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 text-white font-bold py-4 rounded-lg transition-all"
+                        disabled={projectData.facilitiesComplete || budget < projectData.developmentPlan.estimatedCost}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-all"
                       >
                         {projectData.facilitiesComplete ? '✓ Construction Complete' : 
                          `Execute Development ($${(projectData.developmentPlan.estimatedCost/1e6).toFixed(1)}M)`}
                       </button>
 
 
-                      {!projectData.facilitiesComplete && budget < projectData.developmentPlan.estimatedCost && (
+                      {!projectData.facilitiesComplete && budget < projectData.developmentPlan.estimatedCost && (() => {
+                        const devCost = projectData.developmentPlan.estimatedCost;
+                        const shortfall = devCost - budget;
+                        const loanAmount = Math.ceil(shortfall * 1.2);
+                        const baseRate = 0.12;
+                        const financeDiscount = hasRole('finance') ? getRoleBonus('betterFinancing') : 0;
+                        const effectiveRate = baseRate - financeDiscount;
+                        const totalRepayment = Math.floor(loanAmount * (1 + effectiveRate));
+                        const interestCost = totalRepayment - loanAmount;
+                        const assessmentComplete = Object.values(loanAssessment).filter(v => v !== null).length >= 2;
+
+                        return (
                         <div className="bg-orange-900/30 border border-orange-600 rounded-lg p-4 mt-4">
                           <div className="flex items-center gap-2 mb-2">
                             <AlertTriangle className="text-orange-400" size={20} />
-                            <span className="font-bold text-orange-400">Insufficient Budget</span>
+                            <span className="font-bold text-orange-400">Insufficient Budget — Financing Required</span>
                           </div>
                           <p className="text-sm text-slate-300 mb-3">
-                            Development costs exceed your remaining budget. In real projects, companies secure project finance (bank loans backed by future oil revenue).
+                            Development costs exceed your remaining budget. Before securing a loan, review the financial terms
+                            and assess the risks of taking on project debt.
                           </p>
-                          <div className="text-xs text-slate-400 mb-3 space-y-1">
+
+                          <div className="text-xs text-slate-400 mb-4 space-y-1 bg-slate-900/50 rounded p-3">
+                            <div className="font-bold text-sm text-slate-300 mb-2">Loan Terms Summary</div>
                             <div className="flex justify-between">
                               <span>Development cost:</span>
-                              <span className="text-red-400 font-semibold">${(projectData.developmentPlan.estimatedCost/1e6).toFixed(1)}M</span>
+                              <span className="text-red-400 font-semibold">${(devCost/1e6).toFixed(1)}M</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Current budget:</span>
@@ -3989,18 +4010,127 @@ const OilExplorationSimulation = () => {
                             </div>
                             <div className="flex justify-between">
                               <span>Shortfall:</span>
-                              <span className="text-orange-400 font-semibold">${((projectData.developmentPlan.estimatedCost - budget)/1e6).toFixed(1)}M</span>
+                              <span className="text-orange-400 font-semibold">${(shortfall/1e6).toFixed(1)}M</span>
+                            </div>
+                            <div className="border-t border-slate-700 my-2"></div>
+                            <div className="flex justify-between">
+                              <span>Loan amount (shortfall + 20% buffer):</span>
+                              <span className="text-yellow-400 font-semibold">${(loanAmount/1e6).toFixed(1)}M</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Interest rate:</span>
+                              <span className={financeDiscount > 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                                {(effectiveRate * 100).toFixed(1)}%{financeDiscount > 0 && ' (Finance Mgr discount)'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Interest cost:</span>
+                              <span className="text-red-400 font-semibold">${(interestCost/1e6).toFixed(1)}M</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-sm">
+                              <span className="text-slate-300">Total repayment:</span>
+                              <span className="text-orange-400">${(totalRepayment/1e6).toFixed(1)}M</span>
                             </div>
                           </div>
+
+                          <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 mb-4">
+                            <h4 className="font-bold text-sm mb-3 text-purple-400">Team Assessment</h4>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                1. Given the loan terms, what is your risk assessment for taking on this debt?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'accept', label: 'Acceptable risk', desc: 'Revenue will cover repayment' },
+                                  { id: 'cautious', label: 'Cautious', desc: 'Tight margins, some risk' },
+                                  { id: 'reject', label: 'High risk', desc: 'Debt may jeopardize project' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setLoanAssessment(prev => ({...prev, riskAcceptance: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs transition-all text-left ${
+                                      loanAssessment.riskAcceptance === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    <div className="font-bold">{opt.label}</div>
+                                    <div className="text-slate-500 mt-1">{opt.desc}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                2. How do you plan to service the debt?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'production', label: 'Production revenue', desc: 'Pay from oil sales' },
+                                  { id: 'partner', label: 'Bring partner', desc: 'Share costs & revenue' },
+                                  { id: 'phased', label: 'Phased development', desc: 'Build in stages' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setLoanAssessment(prev => ({...prev, repaymentSource: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs transition-all text-left ${
+                                      loanAssessment.repaymentSource === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    <div className="font-bold">{opt.label}</div>
+                                    <div className="text-slate-500 mt-1">{opt.desc}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mb-3">
+                              <div className="text-xs text-slate-400 mb-2">
+                                3. What level of debt-to-equity is acceptable for this project?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'low', label: 'Low (< 30%)', desc: 'Conservative approach' },
+                                  { id: 'medium', label: 'Medium (30-60%)', desc: 'Balanced leverage' },
+                                  { id: 'high', label: 'High (> 60%)', desc: 'Aggressive leverage' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setLoanAssessment(prev => ({...prev, debtTolerance: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs transition-all text-left ${
+                                      loanAssessment.debtTolerance === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    <div className="font-bold">{opt.label}</div>
+                                    <div className="text-slate-500 mt-1">{opt.desc}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {hasRole('finance') && (
+                              <div className="bg-emerald-900/20 border border-emerald-600/50 rounded-lg p-3 mt-3">
+                                <div className="text-xs font-bold text-emerald-400 mb-1">Finance Manager Insight:</div>
+                                <div className="text-xs text-slate-300">
+                                  Our negotiated rate of {(effectiveRate * 100).toFixed(1)}% saves ${((financeDiscount * loanAmount)/1e6).toFixed(1)}M in interest.
+                                  The project NPV of ${(projectData.developmentPlan.npv/1e6).toFixed(0)}M should comfortably cover the ${(totalRepayment/1e6).toFixed(1)}M repayment
+                                  if production targets are met.
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
                           <button
                             onClick={secureLoan}
-                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2"
+                            disabled={!assessmentComplete}
+                            className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2"
                           >
                             <DollarSign size={18} />
-                            Secure Project Finance Loan
+                            {assessmentComplete ? 'Secure Project Finance Loan' : 'Complete assessment to proceed (min. 2 answers)'}
                           </button>
                         </div>
-                      )}
+                        );
+                      })()}
                       {projectData.facilitiesComplete && (
                         <button
                           onClick={advanceWithoutGate}
