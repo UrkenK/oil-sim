@@ -2267,33 +2267,35 @@ const OilExplorationSimulation = () => {
     }
   };
 
-  // Production simulation
+  // Production simulation (limited to 10 years = 3650 days)
+  const PRODUCTION_LIMIT_DAYS = 3650;
   useEffect(() => {
-    if (gameState === 'playing' && currentQuarter.phase === 'production' && production.daily > 0) {
+    if (gameState === 'playing' && currentQuarter.phase === 'production' && production.daily > 0 && production.days < PRODUCTION_LIMIT_DAYS) {
       const interval = setInterval(() => {
         setProduction(prev => {
+          if (prev.days >= PRODUCTION_LIMIT_DAYS) return prev;
           const newDay = prev.days + 1;
           const dailyRev = prev.daily * COSTS.oilPrice;
-          
+
           let dailyCost = COSTS.dailyOPEX;
-          
+
           // Apply operations cost reduction
           if (hasRole('operations')) {
             const reduction = getRoleBonus('operatingCostReduction');
             dailyCost = dailyCost * (1 - reduction);
           }
-          
+
           // Apply finance budget efficiency
           if (hasRole('finance')) {
             const reduction = getRoleBonus('budgetEfficiency');
             dailyCost = dailyCost * (1 - reduction);
           }
-          
+
           const net = dailyRev - dailyCost;
-          
+
           setRevenue(r => r + dailyRev);
           setBudget(b => b + net);
-          
+
           return {
             ...prev,
             days: newDay,
@@ -2301,10 +2303,10 @@ const OilExplorationSimulation = () => {
           };
         });
       }, 50);
-      
+
       return () => clearInterval(interval);
     }
-  }, [gameState, currentQuarter.phase, production.daily]);
+  }, [gameState, currentQuarter.phase, production.daily, production.days]);
 
   const gateEvaluation = evaluateGate();
 
@@ -4181,8 +4183,27 @@ const OilExplorationSimulation = () => {
                   {/* Production Phase */}
                   {currentQuarter.id === 'PROD' && production.daily > 0 && (
                     <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                      <h3 className="text-xl font-bold mb-4">🎉 Full Production Operations</h3>
-                      
+                      <h3 className="text-xl font-bold mb-2">
+                        {production.days >= PRODUCTION_LIMIT_DAYS ? 'Production Complete — 10 Year Summary' : 'Full Production Operations'}
+                      </h3>
+
+                      {/* Production timeline progress */}
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs text-slate-400 mb-1">
+                          <span>Year {Math.min(Math.floor(production.days / 365) + 1, 10)} of 10</span>
+                          <span>{production.days} / {PRODUCTION_LIMIT_DAYS} days</span>
+                        </div>
+                        <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-100"
+                            style={{
+                              width: `${Math.min((production.days / PRODUCTION_LIMIT_DAYS) * 100, 100)}%`,
+                              background: production.days >= PRODUCTION_LIMIT_DAYS ? '#22c55e' : '#3b82f6'
+                            }}
+                          />
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4 mb-4">
                         <div className="bg-emerald-900/30 border border-emerald-600 rounded-lg p-4">
                           <div className="text-sm text-emerald-200">Daily Production</div>
@@ -4199,7 +4220,7 @@ const OilExplorationSimulation = () => {
                         <div className="bg-orange-900/30 border border-orange-600 rounded-lg p-4">
                           <div className="text-sm text-orange-200">Project NPV</div>
                           <div className={`text-3xl font-bold ${
-                            calculateNPV(projectData.reserveEstimate, wells.production, production.daily) > 0 
+                            calculateNPV(projectData.reserveEstimate, wells.production, production.daily) > 0
                               ? 'text-emerald-400' : 'text-red-400'
                           }`}>
                             ${(calculateNPV(projectData.reserveEstimate, wells.production, production.daily)/1e6).toFixed(1)}M
@@ -4216,6 +4237,27 @@ const OilExplorationSimulation = () => {
                           <div>ROI: {(((revenue - totalSpent) / totalSpent) * 100).toFixed(1)}%</div>
                         </div>
                       </div>
+
+                      {production.days >= PRODUCTION_LIMIT_DAYS && (
+                        <div className="mt-4 bg-emerald-900/30 border border-emerald-600 rounded-lg p-4">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-emerald-400 mb-2">10-Year Production Cycle Complete</div>
+                            <p className="text-sm text-slate-300 mb-3">
+                              The field has reached the end of its planned production period.
+                              Final project economics are shown above.
+                            </p>
+                            <div className={`text-2xl font-bold ${revenue > totalSpent ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {revenue > totalSpent ? 'Project Profitable' : 'Project Unprofitable'}
+                            </div>
+                            <button
+                              onClick={() => window.location.reload()}
+                              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-all"
+                            >
+                              Start New Project
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
