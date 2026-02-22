@@ -506,6 +506,78 @@ const generateSeismicInterpretation = (packageType, geologicalType) => {
   return interpretation;
 };
 
+const generateRawSeismicData = (packageType, geologicalType) => {
+  const pkg = SEISMIC_PACKAGES[packageType];
+  const geo = GEOLOGICAL_CHARACTERISTICS[geologicalType];
+  const quality = pkg.interpretation;
+
+  const noiseLevel = 1.0 - (quality.structuralClarity * 0.7);
+
+  const numTraces = 30;
+  const numSamples = 50;
+  const traces = [];
+
+  const layers = [
+    { depth: 0.15, thickness: 0.02, amplitude: 0.6, name: 'Shallow horizon' },
+    { depth: 0.35, thickness: 0.03, amplitude: 0.8, name: 'Mid horizon' },
+    { depth: 0.55, thickness: 0.04, amplitude: 0.9, name: 'Target reservoir top' },
+    { depth: 0.65, thickness: 0.03, amplitude: 0.7, name: 'Target reservoir base' },
+    { depth: 0.80, thickness: 0.02, amplitude: 0.5, name: 'Deep reflector' },
+  ];
+
+  const anticlineCenter = 15;
+  const anticlineAmplitude = geologicalType === 'proven_basin' ? 0.08 :
+                              geologicalType === 'deepwater' ? 0.06 :
+                              geologicalType === 'frontier_basin' ? 0.04 : 0.02;
+
+  const hasAmplitudeAnomaly = Math.random() < (geo.probability * quality.amplitudeConfidence);
+
+  const faultTrace = Math.random() < 0.6 ? Math.floor(Math.random() * 8 + 18) : null;
+  const faultOffset = faultTrace ? (0.03 + Math.random() * 0.05) : 0;
+
+  for (let t = 0; t < numTraces; t++) {
+    const trace = [];
+    for (let s = 0; s < numSamples; s++) {
+      const depth = s / numSamples;
+      let amplitude = 0;
+
+      const distFromCenter = Math.abs(t - anticlineCenter) / numTraces;
+      const structuralShift = anticlineAmplitude * Math.cos(distFromCenter * Math.PI);
+      const faultShift = (faultTrace && t >= faultTrace) ? faultOffset : 0;
+
+      for (const layer of layers) {
+        const adjustedDepth = layer.depth - structuralShift + faultShift;
+        const distFromLayer = Math.abs(depth - adjustedDepth);
+        if (distFromLayer < layer.thickness) {
+          let layerAmp = layer.amplitude * (1 - distFromLayer / layer.thickness);
+          if (layer.name.includes('Target reservoir top') && hasAmplitudeAnomaly && distFromCenter < 0.3) {
+            layerAmp *= 1.5;
+          }
+          amplitude += layerAmp;
+        }
+      }
+
+      amplitude += (Math.random() - 0.5) * noiseLevel * 0.6;
+      trace.push(Math.max(-1, Math.min(1, amplitude)));
+    }
+    traces.push(trace);
+  }
+
+  return {
+    traces,
+    numTraces,
+    numSamples,
+    noiseLevel,
+    layers,
+    hasAmplitudeAnomaly,
+    faultTrace,
+    faultOffset,
+    anticlineAmplitude,
+    anticlineCenter,
+    packageQuality: quality
+  };
+};
+
 const PROBABILITIES = {
   seismic: { excellent: 0.35, good: 0.25, moderate: 0.15, poor: 0.08 },
   geological: { 
@@ -590,6 +662,103 @@ const WELL_TEST_TYPES = {
     description: 'Long-duration test with surface facilities. Provides reservoir behaviour, boundaries, and production forecast data.',
     dataProducts: ['Flow rate profile', 'Pressure transient analysis', 'Fluid PVT data', 'Reservoir boundaries', 'Skin factor', 'Production forecast'],
   },
+};
+
+const SEISMIC_ACQUISITION_MESSAGES = {
+  basic_2d: [
+    'Deploying geophone lines...',
+    'Vibroseis trucks in position...',
+    'Recording 2D seismic lines...',
+    'Shot points 1-50 acquired...',
+    'Shot points 51-100 acquired...',
+    'Rolling receivers to next line...',
+    'Recording cross-lines...',
+    'Field QC checks in progress...',
+    'Final shots recorded...',
+    'Demobilizing equipment...'
+  ],
+  standard_3d: [
+    'Deploying 3D receiver grid...',
+    'Source lines positioned...',
+    'Acquiring first swath...',
+    'Swath 2 of 8 complete...',
+    'Midpoint fold building up...',
+    'Swath 5 of 8 — good data quality...',
+    'Infill shots for coverage gaps...',
+    'Final swath recording...',
+    'Field brute stack QC passed...',
+    'Acquisition complete — demobilizing...'
+  ],
+  high_resolution_3d: [
+    'Deploying dense receiver arrays...',
+    'High-density source grid active...',
+    'Multi-component recording started...',
+    'Continuous recording — swath 1...',
+    'Real-time noise monitoring active...',
+    'Swath 4 of 10 — excellent S/N ratio...',
+    'Acquiring high-fold coverage zones...',
+    'Infill acquisition for imaging gaps...',
+    'Final swath — full fold achieved...',
+    'Dense 3D acquisition complete...'
+  ],
+  premium_3d: [
+    'Deploying ultra-dense nodal array...',
+    'Broadband source activation...',
+    'Simultaneous source recording...',
+    'Multi-azimuth acquisition swath 1...',
+    'Continuous recording — all nodes active...',
+    'Real-time processing QC ongoing...',
+    'Acquiring far-offset data for AVO...',
+    'Broadband frequency sweep complete...',
+    'Full-azimuth coverage achieved...',
+    'Premium acquisition complete — all nodes recovered...'
+  ]
+};
+
+const PROCESSING_WORKFLOWS = {
+  standard: {
+    name: 'Standard Processing',
+    description: 'Basic velocity analysis, NMO correction, and post-stack migration',
+    timeCost: 'Fast',
+    qualityMultiplier: 1.0,
+    messages: [
+      'Applying geometry and trace headers...',
+      'Noise attenuation and filtering...',
+      'Velocity analysis (every 500m)...',
+      'NMO correction and stack...',
+      'Post-stack time migration...',
+      'Generating final stack volume...'
+    ]
+  },
+  advanced: {
+    name: 'Advanced Processing',
+    description: 'Dense velocity analysis, surface-consistent processing, pre-stack time migration',
+    timeCost: 'Moderate',
+    qualityMultiplier: 1.1,
+    messages: [
+      'Surface-consistent amplitude correction...',
+      'Multi-channel noise attenuation...',
+      'Dense velocity analysis (every 250m)...',
+      'Residual statics computation...',
+      'Pre-stack time migration (PSTM)...',
+      'Gather conditioning and AVO-friendly output...'
+    ]
+  },
+  psdm: {
+    name: 'Pre-Stack Depth Migration (PSDM)',
+    description: 'Full velocity model building, anisotropic PSDM. Best imaging for complex geology.',
+    timeCost: 'Slow',
+    qualityMultiplier: 1.2,
+    messages: [
+      'Building initial velocity model...',
+      'Tomographic velocity updates (iteration 1)...',
+      'Tomographic velocity updates (iteration 2)...',
+      'Anisotropy parameter estimation...',
+      'Full pre-stack depth migration...',
+      'Residual moveout analysis and final model...',
+      'Depth-converted output volumes...'
+    ]
+  }
 };
 
 const SEISMIC_CONTRACTORS = {
@@ -843,6 +1012,111 @@ const GeologicalMap = ({ geoType }) => {
   );
 };
 
+const RawSeismicSection = ({ data, processed }) => {
+  if (!data) return null;
+
+  const { traces, numTraces, numSamples, faultTrace, hasAmplitudeAnomaly } = data;
+  const viewWidth = 400;
+  const viewHeight = 300;
+  const traceSpacing = viewWidth / (numTraces + 1);
+  const sampleSpacing = (viewHeight - 20) / numSamples;
+
+  return (
+    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+      <h4 className="font-bold text-sm mb-1 text-center text-blue-400">
+        {processed ? 'Processed Seismic Section' : 'Raw Field Seismic Section (Unprocessed)'}
+      </h4>
+      <p className="text-xs text-slate-400 text-center mb-3">
+        {processed
+          ? 'Processed data with improved signal-to-noise and structural imaging'
+          : 'Review the raw seismic traces below. Can you identify structural features, reflectors, and potential anomalies?'
+        }
+      </p>
+      <svg viewBox={`0 0 ${viewWidth} ${viewHeight}`} className="w-full rounded-lg border border-slate-700"
+           style={{ maxHeight: '350px', background: '#0a0a1a' }}>
+        {[0, 0.25, 0.5, 0.75, 1.0].map((frac, i) => (
+          <text key={i} x="2" y={15 + frac * (viewHeight - 20)} fill="#4a5568" fontSize="7">
+            {Math.floor(frac * 4000)}m
+          </text>
+        ))}
+
+        {[0, 9, 19, 29].map((t, i) => (
+          <text key={i} x={traceSpacing * (t + 1)} y="10" fill="#4a5568" fontSize="7" textAnchor="middle">
+            {t + 1}
+          </text>
+        ))}
+
+        {traces.map((trace, traceIdx) => {
+          const centerX = traceSpacing * (traceIdx + 1);
+          const scale = processed ? traceSpacing * 0.6 : traceSpacing * 0.4;
+
+          let pathD = `M ${centerX} 15`;
+          let fillD = '';
+          let inPositive = false;
+
+          for (let s = 0; s < trace.length; s++) {
+            const y = 15 + s * sampleSpacing;
+            const amp = processed ? trace[s] * 1.3 : trace[s];
+            const x = centerX + amp * scale;
+            pathD += ` L ${x} ${y}`;
+
+            if (amp > 0 && !inPositive) {
+              fillD += `M ${centerX} ${y} L ${x} ${y}`;
+              inPositive = true;
+            } else if (amp > 0 && inPositive) {
+              fillD += ` L ${x} ${y}`;
+            } else if (amp <= 0 && inPositive) {
+              fillD += ` L ${centerX} ${y} Z `;
+              inPositive = false;
+            }
+          }
+          if (inPositive) {
+            fillD += ` L ${centerX} ${15 + (trace.length - 1) * sampleSpacing} Z`;
+          }
+
+          return (
+            <g key={traceIdx}>
+              {fillD && <path d={fillD} fill={processed ? '#3b82f6' : '#1e40af'} opacity={processed ? 0.5 : 0.3} />}
+              <path d={pathD} fill="none" stroke={processed ? '#60a5fa' : '#374151'} strokeWidth="0.8" />
+            </g>
+          );
+        })}
+
+        {faultTrace && (
+          <line
+            x1={traceSpacing * (faultTrace + 1)} y1="15"
+            x2={traceSpacing * (faultTrace + 1) + 10} y2={viewHeight}
+            stroke="#ef4444" strokeWidth="1" strokeDasharray="4,3" opacity={processed ? 0.6 : 0.2}
+          />
+        )}
+
+        {processed && hasAmplitudeAnomaly && (
+          <ellipse
+            cx={traceSpacing * 16} cy={(viewHeight - 20) * 0.55 + 15} rx={traceSpacing * 5} ry="12"
+            fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="3,2" opacity="0.7"
+          />
+        )}
+
+        <text x={viewWidth / 2} y={viewHeight - 3} textAnchor="middle" fill="#4a5568" fontSize="7">
+          Distance (traces)
+        </text>
+      </svg>
+
+      {!processed && (
+        <div className="mt-3 bg-slate-800/50 rounded p-3 border border-slate-600">
+          <div className="text-xs font-bold text-blue-400 mb-1">Reading Guide:</div>
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+            <div>• Strong reflections = lithology changes</div>
+            <div>• Curved reflectors = structural folding</div>
+            <div>• Bright amplitudes = possible fluids</div>
+            <div>• Discontinuities = possible faults</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const OilExplorationSimulation = () => {
   // Game state
   const [gameState, setGameState] = useState('setup');
@@ -861,6 +1135,19 @@ const OilExplorationSimulation = () => {
   const [additionalStudy, setAdditionalStudy] = useState(false); // additional seismic processing
   const [drillingInProgress, setDrillingInProgress] = useState(null); // null | {type, message, progress}
   const [dryHoleHistory, setDryHoleHistory] = useState([]); // [{attempt, type, cost, result, timestamp}]
+
+  // Seismic acquisition sub-steps (Q2)
+  const [seismicStep, setSeismicStep] = useState(0); // 0=select, 1=acquiring, 2=raw review, 3=processing select, 4=processing, 5=complete
+  const [seismicInProgress, setSeismicInProgress] = useState(null); // null | {phase, message, progress}
+  const [rawSeismicData, setRawSeismicData] = useState(null);
+  const [seismicObservations, setSeismicObservations] = useState({
+    structureVisible: null,
+    amplitudeAnomaly: null,
+    faultsVisible: null,
+    estimatedDepth: null,
+    overallAssessment: null
+  });
+  const [processingWorkflow, setProcessingWorkflow] = useState(null);
   
   // Financial
   const [budget, setBudget] = useState(100000000);
@@ -1141,78 +1428,158 @@ const OilExplorationSimulation = () => {
     addNotification('Lease revoked. Budget refunded. You can select a different area.', 'info');
   };
 
-  const conductSeismic = (packageType) => {
-    // Check if we already paid at Gate 1
+  const startSeismicAcquisition = (packageType) => {
     const alreadyPaid = decisions.some(d => d.action.includes('FID 1'));
-    
     const pkg = SEISMIC_PACKAGES[packageType];
     const baseCost = pkg.cost + pkg.processingCost;
     const cost = alreadyPaid ? 0 : applyGeoCost(baseCost, 'seismic');
-    
+
     if (!alreadyPaid && budget < cost) {
       addNotification('Insufficient budget for seismic survey!', 'error');
       return;
     }
-    
-    if (!alreadyPaid) {
-      setBudget(prev => prev - cost);
-      setTotalSpent(prev => prev + cost);
-    }
-    
-    // Calculate probability with both geological type and seismic quality
+
     const geoType = projectData.geologicalType;
     if (!geoType) {
       addNotification('Error: Geological type not selected!', 'error');
       return;
     }
-    
-    let seismicProb = pkg.qualityScore;
-    // Apply contractor quality modifier if selected
-    if (selectedContractor && SEISMIC_CONTRACTORS[selectedContractor]) {
-      seismicProb += SEISMIC_CONTRACTORS[selectedContractor].qualityMod;
+
+    if (!alreadyPaid) {
+      setBudget(prev => prev - cost);
+      setTotalSpent(prev => prev + cost);
     }
-    const geoProb = PROBABILITIES.geological[geoType] || 0;
-    
-    // Apply geologist bonus if on team
-    if (hasRole('geologist')) {
-      seismicProb += getRoleBonus('seismicQualityBoost');
-      addNotification('🔬 Geologist expertise: Enhanced seismic interpretation (+10%)', 'success');
-    }
-    
-    const combinedProb = Math.min(0.95, (seismicProb + geoProb) / 2 + (Math.random() * 0.1 - 0.05));
-    
-    // Generate seismic interpretation results
-    const interpretation = generateSeismicInterpretation(packageType, geoType);
-    
-    setProjectData(prev => ({ 
+
+    setProjectData(prev => ({
       ...prev,
       seismicPackage: packageType,
-      seismicQuality: pkg.quality,
-      seismicComplete: true,
-      seismicInterpretation: interpretation,
-      probabilityOfSuccess: combinedProb
+      seismicQuality: pkg.quality
     }));
-    
-    const geo = getGeoCharacteristics();
-    const costMsg = alreadyPaid 
-      ? '(already funded at Gate 1)' 
-      : geo && geo.seismicCostMultiplier !== 1.0
-        ? `($${(cost/1e6).toFixed(1)}M - ${geo.seismicCostMultiplier}x for ${geo.name})`
-        : `($${(cost/1e6).toFixed(1)}M)`;
-    
-    addNotification(`Seismic ${pkg.name} acquired ${costMsg}`, 'success');
-    addNotification(`Interpretation complete. Combined probability: ${(combinedProb * 100).toFixed(1)}%`, 'info');
-    
-    // Notify about key findings
-    if (interpretation.dhiPresent) {
-      addNotification(`🎯 Direct Hydrocarbon Indicators detected!`, 'success');
-    }
-    if (interpretation.amplitudeAnomaly) {
-      addNotification(`📊 Amplitude anomaly identified - ${interpretation.amplitudeStrength}`, 'info');
-    }
-    if (interpretation.risks.length > 0) {
-      addNotification(`⚠️ ${interpretation.risks.length} risk factors identified`, 'error');
-    }
+
+    // Start acquisition animation
+    setSeismicStep(1);
+    const messages = SEISMIC_ACQUISITION_MESSAGES[packageType] || SEISMIC_ACQUISITION_MESSAGES.standard_3d;
+    setSeismicInProgress({ phase: 'acquisition', message: messages[0], progress: 0 });
+
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      const msgIndex = Math.min(step, messages.length - 1);
+      setSeismicInProgress(prev => prev ? {
+        ...prev,
+        progress: Math.min(step * 10, 90),
+        message: messages[msgIndex]
+      } : prev);
+    }, 400);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      setSeismicInProgress(prev => prev ? {
+        ...prev,
+        progress: 100,
+        message: 'Acquisition complete — data ready for review'
+      } : prev);
+
+      setTimeout(() => {
+        // Generate raw seismic data for visualization
+        const rawData = generateRawSeismicData(packageType, geoType);
+        setRawSeismicData(rawData);
+
+        // Pre-compute interpretation (hidden until processing)
+        let seismicProb = pkg.qualityScore;
+        if (selectedContractor && SEISMIC_CONTRACTORS[selectedContractor]) {
+          seismicProb += SEISMIC_CONTRACTORS[selectedContractor].qualityMod;
+        }
+        const geoProb = PROBABILITIES.geological[geoType] || 0;
+        if (hasRole('geologist')) {
+          seismicProb += getRoleBonus('seismicQualityBoost');
+        }
+        const combinedProb = Math.min(0.95, (seismicProb + geoProb) / 2 + (Math.random() * 0.1 - 0.05));
+        const interpretation = generateSeismicInterpretation(packageType, geoType);
+
+        setProjectData(prev => ({
+          ...prev,
+          seismicInterpretation: interpretation,
+          probabilityOfSuccess: combinedProb
+        }));
+
+        const geo = getGeoCharacteristics();
+        const costMsg = alreadyPaid
+          ? '(already funded at Gate 1)'
+          : geo && geo.seismicCostMultiplier !== 1.0
+            ? `($${(cost/1e6).toFixed(1)}M - ${geo.seismicCostMultiplier}x for ${geo.name})`
+            : `($${(cost/1e6).toFixed(1)}M)`;
+        addNotification(`Seismic ${pkg.name} acquired ${costMsg}`, 'success');
+        addNotification('Raw field data ready for your review. Examine the seismic section below.', 'info');
+        if (hasRole('geologist')) {
+          addNotification('Geologist expertise: Enhanced seismic interpretation (+10%)', 'success');
+        }
+
+        setSeismicInProgress(null);
+        setSeismicStep(2);
+      }, 500);
+    }, 4000);
+  };
+
+  const startSeismicProcessing = (workflowId) => {
+    const workflow = PROCESSING_WORKFLOWS[workflowId];
+    setProcessingWorkflow(workflowId);
+    setSeismicStep(4);
+
+    const messages = workflow.messages;
+    setSeismicInProgress({ phase: 'processing', message: messages[0], progress: 0 });
+
+    let step = 0;
+    const totalSteps = messages.length;
+    const interval = setInterval(() => {
+      step++;
+      const msgIndex = Math.min(step, messages.length - 1);
+      setSeismicInProgress(prev => prev ? {
+        ...prev,
+        progress: Math.min(Math.floor((step / totalSteps) * 90), 90),
+        message: messages[msgIndex]
+      } : prev);
+    }, 500);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      setSeismicInProgress(prev => prev ? {
+        ...prev,
+        progress: 100,
+        message: 'Processing complete — results ready'
+      } : prev);
+
+      setTimeout(() => {
+        const multiplier = workflow.qualityMultiplier;
+        setProjectData(prev => {
+          const interp = { ...prev.seismicInterpretation };
+          interp.structuralConfidence = Math.min(0.95, interp.structuralConfidence * multiplier);
+          interp.volumetricConfidence = Math.min(0.95, interp.volumetricConfidence * multiplier);
+          interp.fluidConfidence = Math.min(0.95, interp.fluidConfidence * multiplier);
+          return {
+            ...prev,
+            seismicInterpretation: interp,
+            seismicComplete: true
+          };
+        });
+
+        addNotification(`${workflow.name} complete. Combined probability: ${(projectData.probabilityOfSuccess * 100).toFixed(1)}%`, 'info');
+        if (projectData.seismicInterpretation) {
+          if (projectData.seismicInterpretation.dhiPresent) {
+            addNotification('Direct Hydrocarbon Indicators detected!', 'success');
+          }
+          if (projectData.seismicInterpretation.amplitudeAnomaly) {
+            addNotification(`Amplitude anomaly identified - ${projectData.seismicInterpretation.amplitudeStrength}`, 'info');
+          }
+          if (projectData.seismicInterpretation.risks.length > 0) {
+            addNotification(`${projectData.seismicInterpretation.risks.length} risk factors identified`, 'error');
+          }
+        }
+
+        setSeismicInProgress(null);
+        setSeismicStep(5);
+      }, 500);
+    }, totalSteps * 500 + 1000);
   };
 
   // Additional seismic processing to improve confidence
@@ -1687,6 +2054,13 @@ const OilExplorationSimulation = () => {
       'New exploration area secured',
       'Fresh geological risk, prior investment lost'
     );
+
+    // Reset seismic sub-step state (relocation includes fast-track seismic)
+    setSeismicStep(5);
+    setSeismicInProgress(null);
+    setRawSeismicData(null);
+    setSeismicObservations({ structureVisible: null, amplitudeAnomaly: null, faultsVisible: null, estimatedDepth: null, overallAssessment: null });
+    setProcessingWorkflow(null);
 
     // Go back to Gate 2 — drill decision
     setGameState('playing');
@@ -2592,113 +2966,415 @@ const OilExplorationSimulation = () => {
 
                   {/* Q2 Activities */}
                   {currentQuarter.id === 'Q2_Y1' && (
-                    <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 relative">
                       <h3 className="text-xl font-bold mb-4">Q2 Activities: Seismic Acquisition & Processing</h3>
-                      
-                      {selectedSeismicPkg && !projectData.seismicComplete && (
-                        <div className="bg-emerald-900/30 border border-emerald-600 rounded-lg p-4 mb-4">
-                          <p className="text-sm text-emerald-300 mb-2">Seismic package <strong>{SEISMIC_PACKAGES[selectedSeismicPkg]?.name}</strong> was selected at FID 1. Contractor: <strong>{selectedContractor ? SEISMIC_CONTRACTORS[selectedContractor]?.name : 'N/A'}</strong></p>
-                          <button onClick={() => conductSeismic(selectedSeismicPkg)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg text-sm">
-                            Execute Seismic Survey
+
+                      {/* Progress indicator */}
+                      <div className="flex items-center justify-between mb-6 bg-slate-900/50 rounded-lg p-3">
+                        {['Package', 'Acquisition', 'Raw Review', 'Processing', 'Complete'].map((label, idx) => (
+                          <div key={idx} className="flex items-center">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
+                              seismicStep > idx ? 'bg-emerald-600 border-emerald-400 text-white' :
+                              seismicStep === idx ? 'bg-blue-600 border-blue-400 text-white' :
+                              'bg-slate-700 border-slate-500 text-slate-400'
+                            }`}>
+                              {seismicStep > idx ? '\u2713' : idx + 1}
+                            </div>
+                            <span className={`ml-1 text-xs hidden sm:inline ${seismicStep >= idx ? 'text-slate-200' : 'text-slate-500'}`}>
+                              {label}
+                            </span>
+                            {idx < 4 && <div className={`w-6 h-0.5 mx-1 ${seismicStep > idx ? 'bg-emerald-500' : 'bg-slate-600'}`} />}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Seismic Animation Overlay */}
+                      {seismicInProgress && (
+                        <div className="absolute inset-0 bg-slate-900/90 rounded-xl flex items-center justify-center z-10">
+                          <div className="text-center p-8">
+                            <div className="animate-pulse mb-6">
+                              <div className="w-20 h-20 mx-auto rounded-full border-4 border-blue-400 border-t-transparent animate-spin"></div>
+                            </div>
+                            <h3 className="text-2xl font-bold mb-2 text-blue-300">{seismicInProgress.message}</h3>
+                            <div className="w-80 mx-auto bg-slate-700 rounded-full h-4 mt-4 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${seismicInProgress.progress}%`,
+                                  background: seismicInProgress.progress < 100 ? '#3b82f6' : '#22c55e'
+                                }}
+                              />
+                            </div>
+                            <p className="text-sm text-slate-400 mt-2">{seismicInProgress.progress}% complete</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {seismicInProgress.phase === 'acquisition' ? 'Field acquisition in progress...' : 'Data processing center...'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* STEP 0: Package Selection / Execute */}
+                      {seismicStep === 0 && (
+                        <>
+                          {selectedSeismicPkg ? (
+                            <div className="bg-emerald-900/30 border border-emerald-600 rounded-lg p-4 mb-4">
+                              <p className="text-sm text-emerald-300 mb-2">
+                                Seismic package <strong>{SEISMIC_PACKAGES[selectedSeismicPkg]?.name}</strong> was selected at FID 1.
+                                Contractor: <strong>{selectedContractor ? SEISMIC_CONTRACTORS[selectedContractor]?.name : 'N/A'}</strong>
+                              </p>
+                              <button onClick={() => startSeismicAcquisition(selectedSeismicPkg)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg text-sm">
+                                Begin Seismic Acquisition
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="bg-blue-900/30 border border-blue-600 rounded-lg p-4 mb-4">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="text-blue-400" />
+                                  <span className="font-bold">Investment Decision: Seismic Package Selection</span>
+                                </div>
+                                <p className="text-sm text-slate-300 mt-1">
+                                  Better seismic data costs more but provides higher confidence in drilling decisions.
+                                  This data will be presented to your team for analysis before drilling.
+                                </p>
+                              </div>
+                              <div className="space-y-3">
+                                <label className="block text-sm font-semibold mb-2">
+                                  Select Seismic Package (Higher cost = Better data quality)
+                                </label>
+                                {Object.entries(SEISMIC_PACKAGES).map(([packageId, pkg]) => {
+                                  const totalCost = applyGeoCost(pkg.cost + pkg.processingCost, 'seismic');
+                                  return (
+                                    <button
+                                      key={packageId}
+                                      onClick={() => startSeismicAcquisition(packageId)}
+                                      className="w-full p-4 rounded-lg border-2 transition-all text-left border-slate-600 bg-slate-700 hover:border-blue-500"
+                                    >
+                                      <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                          <div className="font-bold text-lg">{pkg.name}</div>
+                                          <div className="text-xs text-slate-400">{pkg.description}</div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className={`text-xl font-bold ${
+                                            totalCost > 10000000 ? 'text-red-400' :
+                                            totalCost > 6000000 ? 'text-orange-400' :
+                                            'text-emerald-400'
+                                          }`}>
+                                            ${(totalCost/1e6).toFixed(1)}M
+                                          </div>
+                                          <div className="text-xs text-slate-400">Total cost</div>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-400">Structural Clarity:</span>
+                                          <span className="font-semibold text-blue-300">{(pkg.interpretation.structuralClarity * 100).toFixed(0)}%</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-400">Amplitude Confidence:</span>
+                                          <span className="font-semibold text-purple-300">{(pkg.interpretation.amplitudeConfidence * 100).toFixed(0)}%</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-400">Fault Resolution:</span>
+                                          <span className="font-semibold text-emerald-300">{(pkg.interpretation.faultResolution * 100).toFixed(0)}%</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-400">Depth Accuracy:</span>
+                                          <span className="font-semibold text-orange-300">{(pkg.interpretation.depthAccuracy * 100).toFixed(0)}%</span>
+                                        </div>
+                                      </div>
+                                      <div className="text-xs text-slate-400 mt-2">
+                                        <span className="font-semibold">Deliverables:</span> {pkg.dataProducts.slice(0, 3).join(', ')}
+                                        {pkg.dataProducts.length > 3 && ` +${pkg.dataProducts.length - 3} more`}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {/* STEP 2: Raw Data Review & Observations */}
+                      {seismicStep === 2 && rawSeismicData && (
+                        <div className="space-y-4">
+                          <div className="bg-blue-900/30 border border-blue-600 rounded-lg p-4">
+                            <h4 className="font-bold mb-2 flex items-center gap-2">
+                              <FileText className="text-blue-400" />
+                              Raw Seismic Data — Your Interpretation
+                            </h4>
+                            <p className="text-sm text-slate-300">
+                              Below is the raw field data from your seismic survey. Before computer processing,
+                              examine the section and record your initial observations. In real exploration,
+                              geophysicists review raw data to check quality and form initial hypotheses.
+                            </p>
+                          </div>
+
+                          <RawSeismicSection data={rawSeismicData} processed={false} />
+
+                          <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                            <h4 className="font-bold text-sm mb-3 text-purple-400">Your Observations</h4>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                1. Can you identify a structural closure (anticline/dome) in the reflectors?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'yes', label: 'Yes, clearly' },
+                                  { id: 'maybe', label: 'Possibly' },
+                                  { id: 'no', label: 'No / Unclear' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setSeismicObservations(prev => ({...prev, structureVisible: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                                      seismicObservations.structureVisible === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                2. Do you see any amplitude anomalies (bright spots) in the target zone?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'yes', label: 'Yes, bright spot' },
+                                  { id: 'maybe', label: 'Possibly' },
+                                  { id: 'no', label: 'No anomaly' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setSeismicObservations(prev => ({...prev, amplitudeAnomaly: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                                      seismicObservations.amplitudeAnomaly === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                3. Are there any visible discontinuities suggesting faults?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'yes', label: 'Yes, faults visible' },
+                                  { id: 'maybe', label: 'Possibly' },
+                                  { id: 'no', label: 'No faults seen' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setSeismicObservations(prev => ({...prev, faultsVisible: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                                      seismicObservations.faultsVisible === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                4. What is your estimate for the target reservoir depth?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'shallow', label: '< 1500m' },
+                                  { id: 'medium', label: '1500 - 3000m' },
+                                  { id: 'deep', label: '> 3000m' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setSeismicObservations(prev => ({...prev, estimatedDepth: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                                      seismicObservations.estimatedDepth === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <div className="text-xs text-slate-400 mb-2">
+                                5. Overall, how promising does this prospect look based on the raw data?
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { id: 'promising', label: 'Promising' },
+                                  { id: 'uncertain', label: 'Uncertain' },
+                                  { id: 'poor', label: 'Poor' }
+                                ].map(opt => (
+                                  <button key={opt.id}
+                                    onClick={() => setSeismicObservations(prev => ({...prev, overallAssessment: opt.id}))}
+                                    className={`p-2 rounded-lg border text-xs font-bold transition-all ${
+                                      seismicObservations.overallAssessment === opt.id
+                                        ? 'border-blue-400 bg-blue-900/30 text-blue-300'
+                                        : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                                    }`}>
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {hasRole('geologist') && (
+                              <div className="bg-emerald-900/20 border border-emerald-600/50 rounded-lg p-3 mb-3">
+                                <div className="text-xs font-bold text-emerald-400 mb-1">Geologist Tip:</div>
+                                <div className="text-xs text-slate-300">
+                                  Look at the continuity of reflectors around the center of the section. A structural high
+                                  could indicate an anticline trap. Also check for amplitude brightening at the reservoir level
+                                  compared to the flanks — this may suggest hydrocarbon presence.
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={() => setSeismicStep(3)}
+                            disabled={Object.values(seismicObservations).filter(v => v !== null).length < 3}
+                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
+                          >
+                            Submit Observations & Proceed to Data Processing
                           </button>
                         </div>
                       )}
 
-                      {!selectedSeismicPkg && (
-                      <div className="bg-blue-900/30 border border-blue-600 rounded-lg p-4 mb-4">
-                        <div className="flex items-center gap-2">
-                          <FileText className="text-blue-400" />
-                          <span className="font-bold">Investment Decision: Seismic Package Selection</span>
-                        </div>
-                        <p className="text-sm text-slate-300 mt-1">
-                          Better seismic data costs more but provides higher confidence in drilling decisions.
-                          This data will be presented to your team for analysis before drilling.
-                        </p>
-                      </div>
-                      )}
-                      
-                      {!selectedSeismicPkg && (
-                      <div className="space-y-3">
-                        <label className="block text-sm font-semibold mb-2">
-                          Select Seismic Package (Higher cost = Better data quality)
-                        </label>
-                        
-                        {Object.entries(SEISMIC_PACKAGES).map(([packageId, pkg]) => {
-                          const geo = getGeoCharacteristics();
-                          const totalCost = applyGeoCost(pkg.cost + pkg.processingCost, 'seismic');
-                          
-                          return (
-                            <button
-                              key={packageId}
-                              onClick={() => conductSeismic(packageId)}
-                              disabled={projectData.seismicComplete}
-                              className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                                projectData.seismicPackage === packageId
-                                  ? 'border-emerald-400 bg-emerald-900/30'
-                                  : 'border-slate-600 bg-slate-700 hover:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed'
-                              }`}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <div className="font-bold text-lg">{pkg.name}</div>
-                                  <div className="text-xs text-slate-400">{pkg.description}</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className={`text-xl font-bold ${
-                                    totalCost > 10000000 ? 'text-red-400' :
-                                    totalCost > 6000000 ? 'text-orange-400' :
-                                    'text-emerald-400'
-                                  }`}>
-                                    ${(totalCost/1e6).toFixed(1)}M
+                      {/* STEP 3: Processing Workflow Selection */}
+                      {seismicStep === 3 && (
+                        <div className="space-y-4">
+                          <div className="bg-indigo-900/30 border border-indigo-600 rounded-lg p-4">
+                            <h4 className="font-bold mb-2 flex items-center gap-2">
+                              <Zap className="text-indigo-400" />
+                              Select Data Processing Workflow
+                            </h4>
+                            <p className="text-sm text-slate-300">
+                              Raw seismic data needs computer processing to produce interpretable images.
+                              More advanced processing takes longer but produces clearer results.
+                            </p>
+                          </div>
+
+                          <div className="bg-slate-900/50 rounded p-3 border border-slate-700">
+                            <div className="text-xs font-bold text-slate-400 mb-2">Your Observations Summary:</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>Structure visible: <span className="text-blue-300 capitalize">{seismicObservations.structureVisible || '—'}</span></div>
+                              <div>Amplitude anomaly: <span className="text-blue-300 capitalize">{seismicObservations.amplitudeAnomaly || '—'}</span></div>
+                              <div>Faults visible: <span className="text-blue-300 capitalize">{seismicObservations.faultsVisible || '—'}</span></div>
+                              <div>Est. depth: <span className="text-blue-300 capitalize">{seismicObservations.estimatedDepth || '—'}</span></div>
+                              <div className="col-span-2">Overall: <span className="text-blue-300 capitalize">{seismicObservations.overallAssessment || '—'}</span></div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {Object.entries(PROCESSING_WORKFLOWS).map(([wfId, wf]) => (
+                              <button key={wfId}
+                                onClick={() => startSeismicProcessing(wfId)}
+                                className="w-full p-4 rounded-lg border-2 border-slate-600 bg-slate-700 hover:border-indigo-500 transition-all text-left"
+                              >
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <div className="font-bold text-lg">{wf.name}</div>
+                                    <div className="text-xs text-slate-400">{wf.description}</div>
                                   </div>
-                                  <div className="text-xs text-slate-400">Total cost</div>
+                                  <div className="text-right">
+                                    <div className="text-sm font-bold text-indigo-400">{wf.timeCost}</div>
+                                    <div className="text-xs text-slate-400">
+                                      {wf.qualityMultiplier > 1 ? `+${((wf.qualityMultiplier - 1) * 100).toFixed(0)}% confidence` : 'Baseline'}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Structural Clarity:</span>
-                                  <span className="font-semibold text-blue-300">
-                                    {(pkg.interpretation.structuralClarity * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Amplitude Confidence:</span>
-                                  <span className="font-semibold text-purple-300">
-                                    {(pkg.interpretation.amplitudeConfidence * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Fault Resolution:</span>
-                                  <span className="font-semibold text-emerald-300">
-                                    {(pkg.interpretation.faultResolution * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Depth Accuracy:</span>
-                                  <span className="font-semibold text-orange-300">
-                                    {(pkg.interpretation.depthAccuracy * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                              </div>
-                              
-                              <div className="text-xs text-slate-400 mt-2">
-                                <span className="font-semibold">Deliverables:</span> {pkg.dataProducts.slice(0, 3).join(', ')}
-                                {pkg.dataProducts.length > 3 && ` +${pkg.dataProducts.length - 3} more`}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
-                      <button
-                        onClick={advanceWithoutGate}
-                        disabled={!projectData.seismicComplete}
-                        className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all mt-4"
-                      >
-                        Complete Q2 → Advance to Q3 (Data Interpretation)
-                      </button>
+                      {/* STEP 5: Processing Complete — Results */}
+                      {seismicStep === 5 && (
+                        <div className="space-y-4">
+                          <div className="bg-emerald-900/30 border border-emerald-600 rounded-lg p-4">
+                            <h4 className="font-bold mb-2 flex items-center gap-2">
+                              <CheckCircle className="text-emerald-400" />
+                              Seismic Processing Complete
+                            </h4>
+                            <p className="text-sm text-slate-300">
+                              Data processing is finished. Compare the processed section below with the raw data you reviewed earlier.
+                              The full interpretation report will be presented in Q3 for your detailed analysis.
+                            </p>
+                          </div>
+
+                          <RawSeismicSection data={rawSeismicData} processed={true} />
+
+                          <div className="bg-slate-900/50 rounded p-4 border border-slate-700">
+                            <div className="text-xs font-bold text-purple-400 mb-2">How did your observations compare?</div>
+                            <div className="grid grid-cols-1 gap-2 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Structure visible:</span>
+                                <span>
+                                  <span className="text-blue-300 capitalize">{seismicObservations.structureVisible}</span>
+                                  <span className="text-slate-500 mx-2">|</span>
+                                  <span className="text-emerald-300">
+                                    Actual: {projectData.seismicInterpretation?.closureIdentified ? 'Closure found' : 'No clear closure'}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Amplitude anomaly:</span>
+                                <span>
+                                  <span className="text-blue-300 capitalize">{seismicObservations.amplitudeAnomaly}</span>
+                                  <span className="text-slate-500 mx-2">|</span>
+                                  <span className="text-emerald-300">
+                                    Actual: {projectData.seismicInterpretation?.amplitudeAnomaly ? `Detected (${projectData.seismicInterpretation.amplitudeStrength})` : 'None'}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Faults:</span>
+                                <span>
+                                  <span className="text-blue-300 capitalize">{seismicObservations.faultsVisible}</span>
+                                  <span className="text-slate-500 mx-2">|</span>
+                                  <span className="text-emerald-300">
+                                    Actual: {projectData.seismicInterpretation?.faultsIdentified > 0 ? `${projectData.seismicInterpretation.faultsIdentified} identified` : 'None'}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Depth estimate:</span>
+                                <span>
+                                  <span className="text-blue-300 capitalize">{seismicObservations.estimatedDepth}</span>
+                                  <span className="text-slate-500 mx-2">|</span>
+                                  <span className="text-emerald-300">
+                                    Actual: {projectData.seismicInterpretation?.reservoirDepth}m
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={advanceWithoutGate}
+                            disabled={!projectData.seismicComplete}
+                            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
+                          >
+                            Complete Q2 → Advance to Q3 (Full Interpretation Report)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
