@@ -3732,7 +3732,7 @@ const OilExplorationSimulation = () => {
                                   <div className="space-y-1 text-xs">
                                     <div className="flex justify-between"><span className="text-slate-500">Wells:</span><span>{strat.wells}</span></div>
                                     <div className="flex justify-between"><span className="text-slate-500">Base cost:</span><span className="font-bold">${(totalCost/1e6).toFixed(1)}M</span></div>
-                                    <div className="flex justify-between"><span className="text-slate-500">Uncertainty:</span><span>"+/-" + Math.round(strat.uncertaintyRange * 100) + "%"</span></div>
+                                    <div className="flex justify-between"><span className="text-slate-500">Uncertainty:</span><span>+/- {Math.round(strat.uncertaintyRange * 100)}%</span></div>
                                     <div className="flex justify-between"><span className="text-slate-500">Risk reduction:</span><span className={`${strat.riskReduction === "High" ? "text-emerald-400" : strat.riskReduction === "Medium" ? "text-yellow-400" : "text-red-400"}`}>{strat.riskReduction}</span></div>
                                   </div>
                                   <div className="mt-2 text-xs text-slate-500">
