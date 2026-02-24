@@ -310,10 +310,15 @@ const Q3Activities = () => {
         </div>
 
         <RoleSection roles="operations">
+          {!projectData.drillingPermit && !riskAssessment && (
+            <div className="text-xs text-yellow-400 mb-2 text-center">
+              Select your risk assessment above (Favorable / Marginal / Unfavorable) before applying for a permit.
+            </div>
+          )}
           <button
             onClick={obtainDrillingPermit}
             disabled={projectData.drillingPermit || !riskAssessment || authProps('obtainDrillingPermit').disabled}
-            title={authProps('obtainDrillingPermit').title}
+            title={authProps('obtainDrillingPermit').title || (!riskAssessment ? 'Select a risk assessment first' : '')}
             className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
           >
             {projectData.drillingPermit ? '✓ Drilling Permit Approved' : 'Apply for Drilling Permit'}
