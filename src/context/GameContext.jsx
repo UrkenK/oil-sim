@@ -126,6 +126,11 @@ export const GameProvider = ({ children }) => {
     totalRoyalties: 0,
     totalTax: 0,
     currentDaily: 0,
+    // Monthly accumulator (resets every 30 days)
+    _monthRev: 0,
+    _monthOpex: 0,
+    _monthRoyalties: 0,
+    _monthTax: 0,
   });
 
   // Oil price (dynamic market events)

@@ -42,8 +42,6 @@ export const useProductionSimulation = () => {
   const oilPriceRef = useRef(oilPrice);
   useEffect(() => { oilPriceRef.current = oilPrice; }, [oilPrice]);
 
-  // Financial history: accumulate daily values, flush every 30 days
-  const monthlyAccRef = useRef({ revenue: 0, opex: 0, royalties: 0, tax: 0 });
 
   useEffect(() => {
     if (gameState !== 'playing' || currentQuarter.phase !== 'production' ||
@@ -261,21 +259,19 @@ export const useProductionSimulation = () => {
             }
           }
 
-          // Accumulate monthly financials
-          monthlyAccRef.current.revenue += grossDailyRev;
-          monthlyAccRef.current.opex += dailyCost;
-          monthlyAccRef.current.royalties += royaltyCost;
-          monthlyAccRef.current.tax += tax;
+          // Monthly financial accumulation (pure functional via prev state)
+          const newMonthRev = (prev._monthRev || 0) + grossDailyRev;
+          const newMonthOpex = (prev._monthOpex || 0) + dailyCost;
+          const newMonthRoyalties = (prev._monthRoyalties || 0) + royaltyCost;
+          const newMonthTax = (prev._monthTax || 0) + tax;
 
-          if (newDay > 0 && newDay % 30 === 0) {
+          const isMonthEnd = newDay > 0 && newDay % 30 === 0;
+          if (isMonthEnd) {
             setFinancialHistory(h => [...h, {
               day: newDay, month: newDay / 30,
-              revenue: monthlyAccRef.current.revenue,
-              opex: monthlyAccRef.current.opex,
-              royalties: monthlyAccRef.current.royalties,
-              tax: monthlyAccRef.current.tax,
+              revenue: newMonthRev, opex: newMonthOpex,
+              royalties: newMonthRoyalties, tax: newMonthTax,
             }]);
-            monthlyAccRef.current = { revenue: 0, opex: 0, royalties: 0, tax: 0 };
           }
 
           return {
@@ -286,6 +282,10 @@ export const useProductionSimulation = () => {
             totalOPEX: (prev.totalOPEX || 0) + dailyCost,
             totalRoyalties: (prev.totalRoyalties || 0) + royaltyCost,
             totalTax: (prev.totalTax || 0) + tax,
+            _monthRev: isMonthEnd ? 0 : newMonthRev,
+            _monthOpex: isMonthEnd ? 0 : newMonthOpex,
+            _monthRoyalties: isMonthEnd ? 0 : newMonthRoyalties,
+            _monthTax: isMonthEnd ? 0 : newMonthTax,
           };
         });
 
@@ -320,21 +320,19 @@ export const useProductionSimulation = () => {
           setRevenue(r => r + dailyRev);
           setBudget(b => b + net);
 
-          // Accumulate monthly financials
-          monthlyAccRef.current.revenue += grossDailyRev;
-          monthlyAccRef.current.opex += dailyCost;
-          monthlyAccRef.current.royalties += royaltyCost;
-          monthlyAccRef.current.tax += tax;
+          // Monthly financial accumulation (pure functional via prev state)
+          const newMonthRev = (prev._monthRev || 0) + grossDailyRev;
+          const newMonthOpex = (prev._monthOpex || 0) + dailyCost;
+          const newMonthRoyalties = (prev._monthRoyalties || 0) + royaltyCost;
+          const newMonthTax = (prev._monthTax || 0) + tax;
 
-          if (newDay > 0 && newDay % 30 === 0) {
+          const isMonthEnd = newDay > 0 && newDay % 30 === 0;
+          if (isMonthEnd) {
             setFinancialHistory(h => [...h, {
               day: newDay, month: newDay / 30,
-              revenue: monthlyAccRef.current.revenue,
-              opex: monthlyAccRef.current.opex,
-              royalties: monthlyAccRef.current.royalties,
-              tax: monthlyAccRef.current.tax,
+              revenue: newMonthRev, opex: newMonthOpex,
+              royalties: newMonthRoyalties, tax: newMonthTax,
             }]);
-            monthlyAccRef.current = { revenue: 0, opex: 0, royalties: 0, tax: 0 };
           }
 
           return {
@@ -345,6 +343,10 @@ export const useProductionSimulation = () => {
             totalOPEX: (prev.totalOPEX || 0) + dailyCost,
             totalRoyalties: (prev.totalRoyalties || 0) + royaltyCost,
             totalTax: (prev.totalTax || 0) + tax,
+            _monthRev: isMonthEnd ? 0 : newMonthRev,
+            _monthOpex: isMonthEnd ? 0 : newMonthOpex,
+            _monthRoyalties: isMonthEnd ? 0 : newMonthRoyalties,
+            _monthTax: isMonthEnd ? 0 : newMonthTax,
           };
         });
       }
