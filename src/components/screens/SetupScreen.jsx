@@ -5,7 +5,7 @@ import { useGame } from '../../context/GameContext';
 import { useGameActions } from '../../hooks/useGameActions';
 
 const SetupScreen = ({ multiplayer }) => {
-  const { gameMode, setGameMode, teamComposition, multiplayerState, setMultiplayerState } = useGame();
+  const { gameMode, setGameMode, teamComposition, multiplayerState, setMultiplayerState, projectData, setProjectData } = useGame();
   const { startGame, toggleRole } = useGameActions();
 
   // Local state for multiplayer lobby
@@ -479,6 +479,25 @@ const SetupScreen = ({ multiplayer }) => {
           <div><span className="text-slate-400">Hurdle Rate:</span> <span className="font-bold text-red-400">10% NPV</span></div>
           <div><span className="text-slate-400">Team Size:</span> <span className="font-bold text-yellow-400">{teamComposition.length} roles</span></div>
         </div>
+      </div>
+
+      {/* Game Options */}
+      <div className="bg-slate-900/50 p-4 rounded-lg mb-6 border border-slate-700">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={projectData.detailedWellMode || false}
+            onChange={(e) => setProjectData(prev => ({ ...prev, detailedWellMode: e.target.checked }))}
+            className="w-5 h-5 rounded accent-amber-500"
+          />
+          <div>
+            <div className="font-semibold text-amber-400">Detailed Well Management</div>
+            <div className="text-xs text-slate-400">
+              Track individual wells with unique performance, decline curves, water cut, health, and interventions during production.
+              When off, production uses simplified aggregate simulation.
+            </div>
+          </div>
+        </label>
       </div>
 
       <button

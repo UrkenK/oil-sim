@@ -4,9 +4,10 @@ import { SEISMIC_PACKAGES, SEISMIC_CONTRACTORS, PROCESSING_WORKFLOWS } from '../
 import { APPRAISAL_STRATEGIES, WELL_TEST_TYPES, FACILITY_OPTIONS, FEED_STUDY_OPTIONS } from '../../constants/economics';
 
 const ProjectReport = ({ data, onClose, onExport }) => {
-  const { teamComposition, decisions, roleApprovals, projectData, wells, budget, totalSpent, revenue, production,
+  const { teamComposition, decisions, roleApprovals, projectData, wells, individualWells, budget, totalSpent, revenue, production,
     selectedSeismicPkg, selectedContractor, selectedDrillSite, appraisalStrategy, wellTestType, processingWorkflow,
-    seismicObservations, riskAssessment, loanAssessment, dryHoleHistory, selectedFacilities, feedStudy, gameState } = data;
+    seismicObservations, riskAssessment, loanAssessment, dryHoleHistory, selectedFacilities, feedStudy, gameState,
+    oilPrice, oilPriceHistory } = data;
 
   const sortedDecisions = [...decisions].reverse();
   const geoName = projectData.geologicalType ? GEOLOGICAL_CHARACTERISTICS[projectData.geologicalType]?.name : 'N/A';
@@ -95,6 +96,121 @@ const ProjectReport = ({ data, onClose, onExport }) => {
             </div>
           )}
         </div>
+
+        {/* Oil Price History */}
+        {oilPriceHistory && oilPriceHistory.length > 0 && (
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">
+            <h2 className="text-lg font-bold mb-4 text-blue-400">Oil Price History</h2>
+            <div className="flex justify-between text-xs text-slate-400 mb-2">
+              <span>Start: $75.00/bbl</span>
+              <span>Final: ${oilPrice?.toFixed(2) || 'N/A'}/bbl</span>
+            </div>
+            {/* SVG Sparkline */}
+            {(() => {
+              const priceData = oilPriceHistory;
+              if (priceData.length < 2) return null;
+
+              const width = 700;
+              const height = 200;
+              const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+              const chartW = width - pad.left - pad.right;
+              const chartH = height - pad.top - pad.bottom;
+
+              const prices = priceData.map(d => d.price);
+              const minP = Math.min(...prices) - 5;
+              const maxP = Math.max(...prices) + 5;
+              const minDay = priceData[0].day;
+              const maxDay = priceData[priceData.length - 1].day;
+              const dayRange = maxDay - minDay || 1;
+
+              const x = (day) => pad.left + ((day - minDay) / dayRange) * chartW;
+              const y = (price) => pad.top + chartH - ((price - minP) / (maxP - minP)) * chartH;
+
+              const points = priceData.map(d => `${x(d.day)},${y(d.price)}`).join(' ');
+              const events = priceData.filter(d => d.event && d.eventId !== 'stable_market');
+
+              const gridLines = [30, 50, 75, 100, 130].filter(p => p >= minP && p <= maxP);
+
+              return (
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ maxHeight: '250px' }}>
+                  {gridLines.map(p => (
+                    <g key={p}>
+                      <line x1={pad.left} y1={y(p)} x2={width - pad.right} y2={y(p)}
+                        stroke="#334155" strokeWidth="1" strokeDasharray="4,4" />
+                      <text x={pad.left - 5} y={y(p) + 4} textAnchor="end"
+                        fill="#64748b" fontSize="10">${p}</text>
+                    </g>
+                  ))}
+                  <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                  {events.map((d, i) => (
+                    <circle key={i} cx={x(d.day)} cy={y(d.price)} r="4"
+                      fill={d.price > 75 ? '#10b981' : '#ef4444'}
+                      stroke="#1e293b" strokeWidth="1" />
+                  ))}
+                </svg>
+              );
+            })()}
+            {/* Market Events List */}
+            <div className="mt-4 space-y-1">
+              <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Market Events</div>
+              {oilPriceHistory
+                .filter(p => p.event)
+                .map((p, idx) => (
+                  <div key={idx} className="flex justify-between text-xs bg-slate-900/50 rounded p-2">
+                    <span>
+                      <span className="text-slate-500">Day {p.day}:</span>
+                      <span className="text-slate-300 ml-2">{p.event}</span>
+                    </span>
+                    <span className="font-bold">${p.price.toFixed(2)}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Individual Well Results */}
+        {individualWells && individualWells.length > 0 && (
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">
+            <h2 className="text-lg font-bold mb-4 text-amber-400">Individual Well Performance</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-700 text-slate-400">
+                    <th className="text-left p-2">Well</th>
+                    <th className="text-left p-2">Status</th>
+                    <th className="text-right p-2">IP (bpd)</th>
+                    <th className="text-right p-2">Final (bpd)</th>
+                    <th className="text-right p-2">Cumulative</th>
+                    <th className="text-right p-2">Water Cut</th>
+                    <th className="text-right p-2">Health</th>
+                    <th className="text-right p-2">Workovers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {individualWells.map(w => (
+                    <tr key={w.id} className="border-b border-slate-800">
+                      <td className="p-2 font-bold">{w.name}</td>
+                      <td className="p-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                          w.status === 'producing' ? 'bg-emerald-900/50 text-emerald-400' :
+                          w.status === 'shut_in' ? 'bg-yellow-900/50 text-yellow-400' :
+                          w.status === 'abandoned' ? 'bg-red-900/50 text-red-400' :
+                          'bg-slate-700 text-slate-400'
+                        }`}>{w.status.replace('_',' ')}</span>
+                      </td>
+                      <td className="p-2 text-right">{w.originalIP.toLocaleString()}</td>
+                      <td className="p-2 text-right">{(w.dailyProduction || 0).toLocaleString()}</td>
+                      <td className="p-2 text-right">{(w.cumulativeProduction/1e6).toFixed(2)}M bbl</td>
+                      <td className="p-2 text-right">{(w.waterCut*100).toFixed(1)}%</td>
+                      <td className="p-2 text-right">{w.health.toFixed(0)}%</td>
+                      <td className="p-2 text-right">{w.workoverCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Key Choices */}
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">

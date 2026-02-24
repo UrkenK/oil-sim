@@ -4,6 +4,8 @@ import { GEOLOGICAL_CHARACTERISTICS, DRILL_SITES } from '../constants/geology';
 import { SEISMIC_PACKAGES, SEISMIC_ACQUISITION_MESSAGES, PROCESSING_WORKFLOWS, SEISMIC_CONTRACTORS, RISK_EFFECTS } from '../constants/seismic';
 import { PROBABILITIES, COSTS, APPRAISAL_STRATEGIES, WELL_TEST_TYPES, FACILITY_OPTIONS, FEED_STUDY_OPTIONS, LEASE_OPTIONS, calculateRoyaltyRate, FID_OPTIONS } from '../constants/economics';
 import { generateSeismicInterpretation, generateRawSeismicData } from '../utils/seismicGenerator';
+import { generateIndividualWells } from '../utils/wellGenerator';
+import { WELL_CONFIG } from '../constants/wellConfig';
 import { useGame } from '../context/GameContext';
 import { useRoleHelpers } from './useRoleHelpers';
 import { canExecute, getAuthorityMessage } from '../multiplayer/ActionRouter';
@@ -36,6 +38,8 @@ export const useGameActions = () => {
     revenue, setRevenue,
     projectData, setProjectData,
     wells, setWells,
+    individualWells, setIndividualWells,
+    pendingWellEvents, setPendingWellEvents,
     production, setProduction,
     decisions, setDecisions,
     notifications, setNotifications,
@@ -47,6 +51,7 @@ export const useGameActions = () => {
     fidSelections, setFidSelections,
     multiplayerState,
     actionDispatchRef,
+    oilPrice: contextOilPrice,
   } = useGame();
 
   // Multiplayer dispatch: if we're a peer, send action to host instead of executing locally
@@ -156,13 +161,13 @@ export const useGameActions = () => {
     const geo = getGeoCharacteristics();
 
     const annualProd = dailyProd * 365;
-    const oilPrice = COSTS.oilPrice + (geo ? geo.oilPriceDiscount : 0);
+    const currentOilPrice = contextOilPrice + (geo ? geo.oilPriceDiscount : 0);
 
     // Royalty deduction
     const royaltyOption = leaseTerms.royaltyTerms
       ? LEASE_OPTIONS.royaltyTerms.options[leaseTerms.royaltyTerms]
       : null;
-    const royaltyRate = calculateRoyaltyRate(royaltyOption, oilPrice);
+    const royaltyRate = calculateRoyaltyRate(royaltyOption, currentOilPrice);
 
     // Fixed OPEX (annual)
     let fixedOPEX = COSTS.dailyOPEX * 365;
@@ -200,7 +205,7 @@ export const useGameActions = () => {
     let npv = -totalSpent - devCost;
     for (let year = 1; year <= years; year++) {
       const decline = Math.pow(1 - declineRate, year);
-      const declinedRevenue = annualProd * oilPrice * (1 - royaltyRate) * decline;
+      const declinedRevenue = annualProd * currentOilPrice * (1 - royaltyRate) * decline;
       // Fixed OPEX stays constant, variable scales with decline
       let declinedOPEX = fixedOPEX + variableOPEX * decline;
       if (projectData.riskOpexModifier) declinedOPEX *= (1 + projectData.riskOpexModifier);
@@ -840,6 +845,18 @@ export const useGameActions = () => {
     setWells(prev => ({ ...prev, production: plan.wellCount }));
     setProjectData(prev => ({ ...prev, wellsComplete: true }));
 
+    // Generate individual wells if detailed mode is on
+    if (projectData.detailedWellMode) {
+      const geo = getGeoCharacteristics();
+      const newWells = generateIndividualWells(plan.wellCount, geo);
+      setIndividualWells(newWells);
+      const ipRange = newWells.map(w => w.ip);
+      addNotification(
+        `${plan.wellCount} wells drilled. IP range: ${Math.min(...ipRange).toLocaleString()}-${Math.max(...ipRange).toLocaleString()} bpd`,
+        'success'
+      );
+    }
+
     addNotification(`Well drilling complete! ${plan.wellCount} production wells ($${(wellCost/1e6).toFixed(1)}M)`, 'success');
     logDecision('Drill Production Wells', wellCost, `${plan.wellCount} wells drilled`, 'Well performance risk');
   };
@@ -944,6 +961,17 @@ export const useGameActions = () => {
       }
     }
 
+    // In detailed mode, recalculate from individual well IPs
+    if (projectData.detailedWellMode && individualWells.length > 0) {
+      const wellSum = individualWells.reduce((s, w) => s + w.ip, 0);
+      dailyProd = wellSum; // Individual wells already have geo multiplier applied
+      // Apply facility + risk modifiers to aggregate
+      dailyProd = Math.floor(dailyProd * (1 + combinedProdMod));
+      if (projectData.riskProductionModifier) {
+        dailyProd = Math.floor(dailyProd * (1 + projectData.riskProductionModifier));
+      }
+    }
+
     setProduction(prev => ({ ...prev, daily: dailyProd }));
     setProjectData(prev => ({
       ...prev,
@@ -965,6 +993,148 @@ export const useGameActions = () => {
       `${Object.keys(selectedFacilities).length} modules. OPEX: ${(combinedOpexMod*100).toFixed(0)}%, Prod: +${(combinedProdMod*100).toFixed(0)}%`,
       'Facility performance risk'
     );
+  };
+
+  // ===== Well Actions (detailed mode) =====
+
+  const shutInWell = (wellId) => {
+    if (dispatch('shutInWell', wellId) === '__dispatched__') return;
+    setIndividualWells(prev => prev.map(w =>
+      w.id === wellId && w.status === 'producing'
+        ? { ...w, status: 'shut_in' }
+        : w
+    ));
+    addNotification(`Well ${wellId} shut in`, 'info');
+    logDecision(`Shut-in ${wellId}`, 0, 'Well shut in for standby', 'Production reduced');
+  };
+
+  const restartWell = (wellId) => {
+    if (dispatch('restartWell', wellId) === '__dispatched__') return;
+    const cost = WELL_CONFIG.actions.restart.cost;
+    if (budget < cost) {
+      addNotification('Insufficient budget for restart!', 'error');
+      return;
+    }
+    setBudget(prev => prev - cost);
+    setTotalSpent(prev => prev + cost);
+    setIndividualWells(prev => prev.map(w =>
+      w.id === wellId && w.status === 'shut_in'
+        ? { ...w, status: 'producing' }
+        : w
+    ));
+    addNotification(`Well ${wellId} restarted ($${(cost/1000).toFixed(0)}K)`, 'success');
+  };
+
+  const workoverWell = (wellId) => {
+    if (dispatch('workoverWell', wellId) === '__dispatched__') return;
+    const { costMin, costMax, downtimeMin, downtimeMax, ipRestorationMin, ipRestorationMax, waterCutReduction, healthRestore } = WELL_CONFIG.actions.workover;
+    const cost = Math.floor(costMin + Math.random() * (costMax - costMin));
+    const downtime = Math.floor(downtimeMin + Math.random() * (downtimeMax - downtimeMin));
+
+    if (budget < cost) {
+      addNotification('Insufficient budget for workover!', 'error');
+      return;
+    }
+
+    const restoration = ipRestorationMin + Math.random() * (ipRestorationMax - ipRestorationMin);
+
+    setBudget(prev => prev - cost);
+    setTotalSpent(prev => prev + cost);
+    setIndividualWells(prev => prev.map(w => {
+      if (w.id !== wellId) return w;
+      return {
+        ...w,
+        status: 'workover',
+        actionDowntimeRemaining: downtime,
+        ip: Math.round(w.originalIP * restoration),
+        waterCut: w.waterCut * (1 - waterCutReduction),
+        health: Math.min(100, w.health + healthRestore),
+        workoverCount: w.workoverCount + 1,
+        productionModifier: 1.0,
+      };
+    }));
+    addNotification(`Well ${wellId}: Workover started ($${(cost/1e6).toFixed(1)}M, ${downtime} days)`, 'info');
+    logDecision(`Workover ${wellId}`, cost, `${downtime}-day workover, IP restore ${(restoration*100).toFixed(0)}%`, 'Production downtime');
+  };
+
+  const stimulateWell = (wellId) => {
+    if (dispatch('stimulateWell', wellId) === '__dispatched__') return;
+    const { costMin, costMax, downtime, ipBoostMin, ipBoostMax, boostDurationMin, boostDurationMax } = WELL_CONFIG.actions.stimulation;
+    const cost = Math.floor(costMin + Math.random() * (costMax - costMin));
+
+    if (budget < cost) {
+      addNotification('Insufficient budget for stimulation!', 'error');
+      return;
+    }
+
+    const boost = ipBoostMin + Math.random() * (ipBoostMax - ipBoostMin);
+    const duration = Math.floor(boostDurationMin + Math.random() * (boostDurationMax - boostDurationMin));
+
+    setBudget(prev => prev - cost);
+    setTotalSpent(prev => prev + cost);
+    setIndividualWells(prev => prev.map(w => {
+      if (w.id !== wellId) return w;
+      return {
+        ...w,
+        status: 'stimulation',
+        actionDowntimeRemaining: downtime,
+        stimulationBoost: boost,
+        stimulationDaysRemaining: duration,
+      };
+    }));
+    addNotification(`Well ${wellId}: Stimulation ($${(cost/1e6).toFixed(1)}M, +${(boost*100).toFixed(0)}% for ${Math.round(duration/365*10)/10}yr)`, 'info');
+    logDecision(`Stimulate ${wellId}`, cost, `+${(boost*100).toFixed(0)}% boost for ${duration} days`, 'Short-term gain');
+  };
+
+  const abandonWell = (wellId) => {
+    if (dispatch('abandonWell', wellId) === '__dispatched__') return;
+    const { costMin, costMax } = WELL_CONFIG.actions.abandon;
+    const cost = Math.floor(costMin + Math.random() * (costMax - costMin));
+
+    if (budget < cost) {
+      addNotification('Insufficient budget for P&A!', 'error');
+      return;
+    }
+
+    setBudget(prev => prev - cost);
+    setTotalSpent(prev => prev + cost);
+    setIndividualWells(prev => prev.map(w =>
+      w.id === wellId ? { ...w, status: 'abandoned', dailyProduction: 0 } : w
+    ));
+    // Also remove any pending events for this well
+    setPendingWellEvents(prev => prev.filter(e => e.wellId !== wellId));
+    addNotification(`Well ${wellId} plugged & abandoned ($${(cost/1e6).toFixed(1)}M)`, 'warning');
+    logDecision(`Abandon ${wellId}`, cost, 'P&A complete', 'Well removed');
+  };
+
+  const repairWell = (wellId, eventId) => {
+    if (dispatch('repairWell', wellId, eventId) === '__dispatched__') return;
+    const event = pendingWellEvents.find(e => e.id === eventId);
+    if (!event) return;
+
+    const cost = event.repairCost || 0;
+    if (budget < cost) {
+      addNotification('Insufficient budget for repair!', 'error');
+      return;
+    }
+
+    setBudget(prev => prev - cost);
+    setTotalSpent(prev => prev + cost);
+    setIndividualWells(prev => prev.map(w => {
+      if (w.id !== wellId) return w;
+      return {
+        ...w,
+        status: 'repair',
+        actionDowntimeRemaining: event.repairDays || 7,
+      };
+    }));
+    setPendingWellEvents(prev => prev.filter(e => e.id !== eventId));
+    addNotification(`Well ${wellId}: Repair started ($${(cost/1e6).toFixed(1)}M, ${event.repairDays || 7} days)`, 'info');
+  };
+
+  const dismissWellEvent = (eventId) => {
+    if (dispatch('dismissWellEvent', eventId) === '__dispatched__') return;
+    setPendingWellEvents(prev => prev.filter(e => e.id !== eventId));
   };
 
   // Decision gate handling
@@ -1521,6 +1691,14 @@ export const useGameActions = () => {
     abandonProject,
     makeGateDecision,
     advanceWithoutGate,
+    // Well management
+    shutInWell,
+    restartWell,
+    workoverWell,
+    stimulateWell,
+    abandonWell,
+    repairWell,
+    dismissWellEvent,
     // Direct setter wrappers
     setSelectedSeismicPkg: (pkgId) => setSelectedSeismicPkg(pkgId),
     setSelectedContractor: (cId) => setSelectedContractor(cId),
@@ -1639,6 +1817,14 @@ export const useGameActions = () => {
     relocateExploration,
     farmOut,
     abandonProject,
+    // Well management (detailed mode)
+    shutInWell,
+    restartWell,
+    workoverWell,
+    stimulateWell,
+    abandonWell,
+    repairWell,
+    dismissWellEvent,
     // Export
     exportSession,
     // Authority (multiplayer)

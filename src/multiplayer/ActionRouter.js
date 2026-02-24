@@ -45,6 +45,15 @@ const ACTION_AUTHORITY = {
   selectFacility: ['operations', 'engineer'],
   confirmFacilities: ['operations'],
 
+  // Well management (detailed mode)
+  shutInWell: ['operations'],
+  restartWell: ['operations'],
+  workoverWell: ['engineer', 'operations'],
+  stimulateWell: ['engineer'],
+  abandonWell: ['operations', 'finance'],
+  repairWell: ['engineer', 'operations'],
+  dismissWellEvent: ['operations'],
+
   // Dry hole
   drillAnotherWell: ['engineer'],
   relocateExploration: ['geologist'],

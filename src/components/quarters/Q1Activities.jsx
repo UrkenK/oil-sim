@@ -15,6 +15,7 @@ const Q1Activities = () => {
   const {
     projectData,
     leaseTerms,
+    oilPrice,
   } = useGame();
 
   const { hasRole } = useRoleHelpers();
@@ -203,7 +204,7 @@ const Q1Activities = () => {
             const roy = LEASE_OPTIONS.royaltyTerms.options[lt.royaltyTerms];
             const baseCost = lic.cost + env.cost + blk.cost + blk.permitCost + roy.cost;
             const totalCost = applyGeoCost(baseCost, 'lease');
-            const royaltyRate = calculateRoyaltyRate(roy, COSTS.oilPrice);
+            const royaltyRate = calculateRoyaltyRate(roy, oilPrice);
             return (
               <div className="bg-slate-900/50 rounded-lg p-4 mb-3 border border-slate-700">
                 <h5 className="text-sm font-bold text-slate-200 mb-2">Cost Summary</h5>

@@ -101,6 +101,7 @@ export const GameProvider = ({ children }) => {
     loanAmount: 0,
     loanInterest: 0,
     loanSource: null,
+    detailedWellMode: false,
   });
 
   // Wells
@@ -112,6 +113,10 @@ export const GameProvider = ({ children }) => {
     dry: 0
   });
 
+  // Individual well management (detailed mode)
+  const [individualWells, setIndividualWells] = useState([]);
+  const [pendingWellEvents, setPendingWellEvents] = useState([]);
+
   // Production
   const [production, setProduction] = useState({
     daily: 0,
@@ -122,6 +127,11 @@ export const GameProvider = ({ children }) => {
     totalTax: 0,
     currentDaily: 0,
   });
+
+  // Oil price (dynamic market events)
+  const [oilPrice, setOilPrice] = useState(75);
+  const [oilPriceHistory, setOilPriceHistory] = useState([]);
+  const [currentMarketEvent, setCurrentMarketEvent] = useState(null);
 
   // Decisions & notifications
   const [decisions, setDecisions] = useState([]);
@@ -177,7 +187,12 @@ export const GameProvider = ({ children }) => {
     quarterlyFinancials,
     projectData,
     wells,
+    individualWells,
+    pendingWellEvents,
     production,
+    oilPrice,
+    oilPriceHistory,
+    currentMarketEvent,
     decisions,
     notifications,
     justification,
@@ -189,8 +204,9 @@ export const GameProvider = ({ children }) => {
     additionalStudy, dryHoleHistory, feedStudy, seismicStep, seismicInProgress,
     rawSeismicData, seismicObservations, processingWorkflow, loanAssessment, leaseTerms,
     fidSelections, selectedFacilities, budget, totalSpent, revenue, quarterlyFinancials,
-    projectData, wells, production, decisions, notifications, justification,
-    drillingInProgress,
+    projectData, wells, individualWells, pendingWellEvents, production,
+    oilPrice, oilPriceHistory, currentMarketEvent,
+    decisions, notifications, justification, drillingInProgress,
   ]);
 
   // Apply state snapshot from host (used by peers)
@@ -228,7 +244,12 @@ export const GameProvider = ({ children }) => {
     if (snapshot.quarterlyFinancials !== undefined) setQuarterlyFinancials(snapshot.quarterlyFinancials);
     if (snapshot.projectData !== undefined) setProjectData(snapshot.projectData);
     if (snapshot.wells !== undefined) setWells(snapshot.wells);
+    if (snapshot.individualWells !== undefined) setIndividualWells(snapshot.individualWells);
+    if (snapshot.pendingWellEvents !== undefined) setPendingWellEvents(snapshot.pendingWellEvents);
     if (snapshot.production !== undefined) setProduction(snapshot.production);
+    if (snapshot.oilPrice !== undefined) setOilPrice(snapshot.oilPrice);
+    if (snapshot.oilPriceHistory !== undefined) setOilPriceHistory(snapshot.oilPriceHistory);
+    if (snapshot.currentMarketEvent !== undefined) setCurrentMarketEvent(snapshot.currentMarketEvent);
     if (snapshot.decisions !== undefined) setDecisions(snapshot.decisions);
     if (snapshot.notifications !== undefined) setNotifications(snapshot.notifications);
     if (snapshot.justification !== undefined) setJustification(snapshot.justification);
@@ -288,9 +309,16 @@ export const GameProvider = ({ children }) => {
 
     // Wells
     wells, setWells,
+    individualWells, setIndividualWells,
+    pendingWellEvents, setPendingWellEvents,
 
     // Production
     production, setProduction,
+
+    // Oil price
+    oilPrice, setOilPrice,
+    oilPriceHistory, setOilPriceHistory,
+    currentMarketEvent, setCurrentMarketEvent,
 
     // Decisions & notifications
     decisions, setDecisions,

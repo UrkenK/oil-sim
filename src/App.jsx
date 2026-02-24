@@ -35,11 +35,12 @@ const OilExplorationSimulation = () => {
     showReport, setShowReport,
     projectData,
     production,
-    teamComposition, decisions, roleApprovals, wells, budget, totalSpent, revenue,
+    teamComposition, decisions, roleApprovals, wells, individualWells, budget, totalSpent, revenue,
     selectedSeismicPkg, selectedContractor, selectedDrillSite, appraisalStrategy,
     wellTestType, processingWorkflow, seismicObservations, riskAssessment,
     loanAssessment, dryHoleHistory, gameMode,
     selectedFacilities, feedStudy,
+    oilPrice, oilPriceHistory,
     multiplayerState,
     getSnapshot, applySnapshot,
     actionDispatchRef,
@@ -147,10 +148,11 @@ const OilExplorationSimulation = () => {
   const gateEvaluation = evaluateGate();
 
   const reportData = {
-    teamComposition, decisions, roleApprovals, projectData, wells, budget, totalSpent, revenue, production,
+    teamComposition, decisions, roleApprovals, projectData, wells, individualWells, budget, totalSpent, revenue, production,
     selectedSeismicPkg, selectedContractor, selectedDrillSite, appraisalStrategy, wellTestType, processingWorkflow,
     seismicObservations, riskAssessment, loanAssessment, dryHoleHistory, gameState,
-    selectedFacilities, feedStudy
+    selectedFacilities, feedStudy,
+    oilPrice, oilPriceHistory
   };
 
   if (showReport) {
