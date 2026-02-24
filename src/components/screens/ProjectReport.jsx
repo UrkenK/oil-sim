@@ -7,7 +7,7 @@ const ProjectReport = ({ data, onClose, onExport }) => {
   const { teamComposition, decisions, roleApprovals, projectData, wells, individualWells, budget, totalSpent, revenue, production,
     selectedSeismicPkg, selectedContractor, selectedDrillSite, appraisalStrategy, wellTestType, processingWorkflow,
     seismicObservations, riskAssessment, loanAssessment, dryHoleHistory, selectedFacilities, feedStudy, gameState,
-    oilPrice, oilPriceHistory } = data;
+    oilPrice, oilPriceHistory, financialHistory } = data;
 
   const sortedDecisions = [...decisions].reverse();
   const geoName = projectData.geologicalType ? GEOLOGICAL_CHARACTERISTICS[projectData.geologicalType]?.name : 'N/A';
@@ -165,6 +165,78 @@ const ProjectReport = ({ data, onClose, onExport }) => {
                   </div>
                 ))}
             </div>
+          </div>
+        )}
+
+        {/* Financial Performance Chart */}
+        {financialHistory && financialHistory.length >= 2 && (
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">
+            <h2 className="text-lg font-bold mb-4 text-blue-400">Monthly Financial Performance</h2>
+            {(() => {
+              const width = 700;
+              const height = 250;
+              const pad = { top: 20, right: 20, bottom: 35, left: 55 };
+              const chartW = width - pad.left - pad.right;
+              const chartH = height - pad.top - pad.bottom;
+
+              const revData = financialHistory.map(d => d.revenue);
+              const expData = financialHistory.map(d => d.opex + d.royalties + d.tax);
+              const allVals = [...revData, ...expData];
+              const maxVal = Math.max(...allVals) * 1.1;
+              const minVal = 0;
+              const valRange = maxVal - minVal || 1;
+
+              const x = (i) => pad.left + (i / (financialHistory.length - 1)) * chartW;
+              const y = (v) => pad.top + chartH - ((v - minVal) / valRange) * chartH;
+
+              const revPoints = financialHistory.map((d, i) => `${x(i)},${y(d.revenue)}`).join(' ');
+              const expPoints = financialHistory.map((d, i) => `${x(i)},${y(d.opex + d.royalties + d.tax)}`).join(' ');
+
+              const gridCount = 4;
+              const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => minVal + (valRange * i) / gridCount);
+
+              const yearLabels = [];
+              for (let i = 0; i < financialHistory.length; i++) {
+                if (financialHistory[i].month % 12 === 0) {
+                  yearLabels.push({ i, year: financialHistory[i].month / 12 });
+                }
+              }
+
+              return (
+                <>
+                  <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ maxHeight: '300px' }}>
+                    {gridLines.map((v, i) => (
+                      <g key={i}>
+                        <line x1={pad.left} y1={y(v)} x2={width - pad.right} y2={y(v)}
+                          stroke="#334155" strokeWidth="1" strokeDasharray="4,4" />
+                        <text x={pad.left - 5} y={y(v) + 4} textAnchor="end"
+                          fill="#64748b" fontSize="10">${(v / 1e6).toFixed(1)}M</text>
+                      </g>
+                    ))}
+                    {yearLabels.map(({ i, year }) => (
+                      <g key={year}>
+                        <line x1={x(i)} y1={pad.top} x2={x(i)} y2={pad.top + chartH}
+                          stroke="#334155" strokeWidth="1" strokeDasharray="2,4" />
+                        <text x={x(i)} y={height - 5} textAnchor="middle"
+                          fill="#64748b" fontSize="10">Y{year}</text>
+                      </g>
+                    ))}
+                    <polyline points={revPoints} fill="none" stroke="#10b981" strokeWidth="2" />
+                    <polyline points={expPoints} fill="none" stroke="#ef4444" strokeWidth="2" />
+                  </svg>
+                  <div className="flex justify-center gap-6 mt-2 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-0.5 bg-emerald-500"></div>
+                      <span className="text-slate-400">Gross Revenue</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-0.5 bg-red-500"></div>
+                      <span className="text-slate-400">Total Expenses</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 

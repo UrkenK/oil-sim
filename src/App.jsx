@@ -40,7 +40,7 @@ const OilExplorationSimulation = () => {
     wellTestType, processingWorkflow, seismicObservations, riskAssessment,
     loanAssessment, dryHoleHistory, gameMode,
     selectedFacilities, feedStudy,
-    oilPrice, oilPriceHistory,
+    oilPrice, oilPriceHistory, financialHistory,
     multiplayerState,
     getSnapshot, applySnapshot,
     actionDispatchRef,
@@ -152,7 +152,7 @@ const OilExplorationSimulation = () => {
     selectedSeismicPkg, selectedContractor, selectedDrillSite, appraisalStrategy, wellTestType, processingWorkflow,
     seismicObservations, riskAssessment, loanAssessment, dryHoleHistory, gameState,
     selectedFacilities, feedStudy,
-    oilPrice, oilPriceHistory
+    oilPrice, oilPriceHistory, financialHistory
   };
 
   if (showReport) {

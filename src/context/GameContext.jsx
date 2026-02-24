@@ -133,6 +133,9 @@ export const GameProvider = ({ children }) => {
   const [oilPriceHistory, setOilPriceHistory] = useState([]);
   const [currentMarketEvent, setCurrentMarketEvent] = useState(null);
 
+  // Financial history (monthly snapshots during production)
+  const [financialHistory, setFinancialHistory] = useState([]);
+
   // Decisions & notifications
   const [decisions, setDecisions] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -193,6 +196,7 @@ export const GameProvider = ({ children }) => {
     oilPrice,
     oilPriceHistory,
     currentMarketEvent,
+    financialHistory,
     decisions,
     notifications,
     justification,
@@ -205,7 +209,7 @@ export const GameProvider = ({ children }) => {
     rawSeismicData, seismicObservations, processingWorkflow, loanAssessment, leaseTerms,
     fidSelections, selectedFacilities, budget, totalSpent, revenue, quarterlyFinancials,
     projectData, wells, individualWells, pendingWellEvents, production,
-    oilPrice, oilPriceHistory, currentMarketEvent,
+    oilPrice, oilPriceHistory, currentMarketEvent, financialHistory,
     decisions, notifications, justification, drillingInProgress,
   ]);
 
@@ -250,6 +254,7 @@ export const GameProvider = ({ children }) => {
     if (snapshot.oilPrice !== undefined) setOilPrice(snapshot.oilPrice);
     if (snapshot.oilPriceHistory !== undefined) setOilPriceHistory(snapshot.oilPriceHistory);
     if (snapshot.currentMarketEvent !== undefined) setCurrentMarketEvent(snapshot.currentMarketEvent);
+    if (snapshot.financialHistory !== undefined) setFinancialHistory(snapshot.financialHistory);
     if (snapshot.decisions !== undefined) setDecisions(snapshot.decisions);
     if (snapshot.notifications !== undefined) setNotifications(snapshot.notifications);
     if (snapshot.justification !== undefined) setJustification(snapshot.justification);
@@ -319,6 +324,9 @@ export const GameProvider = ({ children }) => {
     oilPrice, setOilPrice,
     oilPriceHistory, setOilPriceHistory,
     currentMarketEvent, setCurrentMarketEvent,
+
+    // Financial history
+    financialHistory, setFinancialHistory,
 
     // Decisions & notifications
     decisions, setDecisions,
