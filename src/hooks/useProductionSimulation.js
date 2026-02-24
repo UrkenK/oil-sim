@@ -43,7 +43,6 @@ export const useProductionSimulation = () => {
   useEffect(() => { oilPriceRef.current = oilPrice; }, [oilPrice]);
 
   // Financial history: accumulate daily values, flush every 30 days
-  const tickFinancialsRef = useRef({ grossRev: 0, opex: 0, royalties: 0, tax: 0 });
   const monthlyAccRef = useRef({ revenue: 0, opex: 0, royalties: 0, tax: 0 });
 
   useEffect(() => {
@@ -262,7 +261,22 @@ export const useProductionSimulation = () => {
             }
           }
 
-          tickFinancialsRef.current = { grossRev: grossDailyRev, opex: dailyCost, royalties: royaltyCost, tax };
+          // Accumulate monthly financials
+          monthlyAccRef.current.revenue += grossDailyRev;
+          monthlyAccRef.current.opex += dailyCost;
+          monthlyAccRef.current.royalties += royaltyCost;
+          monthlyAccRef.current.tax += tax;
+
+          if (newDay > 0 && newDay % 30 === 0) {
+            setFinancialHistory(h => [...h, {
+              day: newDay, month: newDay / 30,
+              revenue: monthlyAccRef.current.revenue,
+              opex: monthlyAccRef.current.opex,
+              royalties: monthlyAccRef.current.royalties,
+              tax: monthlyAccRef.current.tax,
+            }]);
+            monthlyAccRef.current = { revenue: 0, opex: 0, royalties: 0, tax: 0 };
+          }
 
           return {
             ...prev,
@@ -306,7 +320,22 @@ export const useProductionSimulation = () => {
           setRevenue(r => r + dailyRev);
           setBudget(b => b + net);
 
-          tickFinancialsRef.current = { grossRev: grossDailyRev, opex: dailyCost, royalties: royaltyCost, tax };
+          // Accumulate monthly financials
+          monthlyAccRef.current.revenue += grossDailyRev;
+          monthlyAccRef.current.opex += dailyCost;
+          monthlyAccRef.current.royalties += royaltyCost;
+          monthlyAccRef.current.tax += tax;
+
+          if (newDay > 0 && newDay % 30 === 0) {
+            setFinancialHistory(h => [...h, {
+              day: newDay, month: newDay / 30,
+              revenue: monthlyAccRef.current.revenue,
+              opex: monthlyAccRef.current.opex,
+              royalties: monthlyAccRef.current.royalties,
+              tax: monthlyAccRef.current.tax,
+            }]);
+            monthlyAccRef.current = { revenue: 0, opex: 0, royalties: 0, tax: 0 };
+          }
 
           return {
             ...prev,
@@ -318,25 +347,6 @@ export const useProductionSimulation = () => {
             totalTax: (prev.totalTax || 0) + tax,
           };
         });
-      }
-
-      // Monthly financial history accumulation (after both modes)
-      const tf = tickFinancialsRef.current;
-      monthlyAccRef.current.revenue += tf.grossRev;
-      monthlyAccRef.current.opex += tf.opex;
-      monthlyAccRef.current.royalties += tf.royalties;
-      monthlyAccRef.current.tax += tf.tax;
-
-      if (currentDay > 0 && currentDay % 30 === 0) {
-        setFinancialHistory(prev => [...prev, {
-          day: currentDay,
-          month: currentDay / 30,
-          revenue: monthlyAccRef.current.revenue,
-          opex: monthlyAccRef.current.opex,
-          royalties: monthlyAccRef.current.royalties,
-          tax: monthlyAccRef.current.tax,
-        }]);
-        monthlyAccRef.current = { revenue: 0, opex: 0, royalties: 0, tax: 0 };
       }
     }, 50);
 
