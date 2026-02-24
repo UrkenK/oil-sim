@@ -7,8 +7,9 @@ const ProjectReport = ({ data, onClose, onExport }) => {
   const { teamComposition, decisions, roleApprovals, projectData, wells, individualWells, budget, totalSpent, revenue, production,
     selectedSeismicPkg, selectedContractor, selectedDrillSite, appraisalStrategy, wellTestType, processingWorkflow,
     seismicObservations, riskAssessment, loanAssessment, dryHoleHistory, selectedFacilities, feedStudy, gameState,
-    oilPrice, oilPriceHistory, financialHistory } = data;
+    oilPrice, oilPriceHistory } = data;
 
+  const financialHistory = production?.financialHistory || [];
   const sortedDecisions = [...decisions].reverse();
   const geoName = projectData.geologicalType ? GEOLOGICAL_CHARACTERISTICS[projectData.geologicalType]?.name : 'N/A';
   const isTerminated = gameState === 'ended';

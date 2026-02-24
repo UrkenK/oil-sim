@@ -23,7 +23,6 @@ export const useProductionSimulation = () => {
     notifications, setNotifications,
     oilPrice, setOilPrice,
     setOilPriceHistory, setCurrentMarketEvent,
-    setFinancialHistory,
   } = useGame();
 
   const { hasRole, getRoleBonus } = useRoleHelpers();
@@ -266,13 +265,6 @@ export const useProductionSimulation = () => {
           const newMonthTax = (prev._monthTax || 0) + tax;
 
           const isMonthEnd = newDay > 0 && newDay % 30 === 0;
-          if (isMonthEnd) {
-            setFinancialHistory(h => [...h, {
-              day: newDay, month: newDay / 30,
-              revenue: newMonthRev, opex: newMonthOpex,
-              royalties: newMonthRoyalties, tax: newMonthTax,
-            }]);
-          }
 
           return {
             ...prev,
@@ -286,6 +278,13 @@ export const useProductionSimulation = () => {
             _monthOpex: isMonthEnd ? 0 : newMonthOpex,
             _monthRoyalties: isMonthEnd ? 0 : newMonthRoyalties,
             _monthTax: isMonthEnd ? 0 : newMonthTax,
+            financialHistory: isMonthEnd
+              ? [...(prev.financialHistory || []), {
+                  day: newDay, month: newDay / 30,
+                  revenue: newMonthRev, opex: newMonthOpex,
+                  royalties: newMonthRoyalties, tax: newMonthTax,
+                }]
+              : (prev.financialHistory || []),
           };
         });
 
@@ -327,13 +326,6 @@ export const useProductionSimulation = () => {
           const newMonthTax = (prev._monthTax || 0) + tax;
 
           const isMonthEnd = newDay > 0 && newDay % 30 === 0;
-          if (isMonthEnd) {
-            setFinancialHistory(h => [...h, {
-              day: newDay, month: newDay / 30,
-              revenue: newMonthRev, opex: newMonthOpex,
-              royalties: newMonthRoyalties, tax: newMonthTax,
-            }]);
-          }
 
           return {
             ...prev,
@@ -347,6 +339,13 @@ export const useProductionSimulation = () => {
             _monthOpex: isMonthEnd ? 0 : newMonthOpex,
             _monthRoyalties: isMonthEnd ? 0 : newMonthRoyalties,
             _monthTax: isMonthEnd ? 0 : newMonthTax,
+            financialHistory: isMonthEnd
+              ? [...(prev.financialHistory || []), {
+                  day: newDay, month: newDay / 30,
+                  revenue: newMonthRev, opex: newMonthOpex,
+                  royalties: newMonthRoyalties, tax: newMonthTax,
+                }]
+              : (prev.financialHistory || []),
           };
         });
       }

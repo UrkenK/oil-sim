@@ -24,8 +24,9 @@ const ProductionPhase = () => {
     pendingWellEvents,
     oilPrice,
     currentMarketEvent,
-    financialHistory,
   } = useGame();
+
+  const financialHistory = production.financialHistory || [];
 
   const { calculateNPV, shutInWell, restartWell, workoverWell, stimulateWell, abandonWell, repairWell, dismissWellEvent } = useGameActions();
   const { hasRole, getRoleBonus } = useRoleHelpers();

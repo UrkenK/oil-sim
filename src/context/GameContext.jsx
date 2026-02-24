@@ -131,15 +131,14 @@ export const GameProvider = ({ children }) => {
     _monthOpex: 0,
     _monthRoyalties: 0,
     _monthTax: 0,
+    // Monthly snapshots array (flushed every 30 days)
+    financialHistory: [],
   });
 
   // Oil price (dynamic market events)
   const [oilPrice, setOilPrice] = useState(75);
   const [oilPriceHistory, setOilPriceHistory] = useState([]);
   const [currentMarketEvent, setCurrentMarketEvent] = useState(null);
-
-  // Financial history (monthly snapshots during production)
-  const [financialHistory, setFinancialHistory] = useState([]);
 
   // Decisions & notifications
   const [decisions, setDecisions] = useState([]);
@@ -201,7 +200,6 @@ export const GameProvider = ({ children }) => {
     oilPrice,
     oilPriceHistory,
     currentMarketEvent,
-    financialHistory,
     decisions,
     notifications,
     justification,
@@ -214,7 +212,7 @@ export const GameProvider = ({ children }) => {
     rawSeismicData, seismicObservations, processingWorkflow, loanAssessment, leaseTerms,
     fidSelections, selectedFacilities, budget, totalSpent, revenue, quarterlyFinancials,
     projectData, wells, individualWells, pendingWellEvents, production,
-    oilPrice, oilPriceHistory, currentMarketEvent, financialHistory,
+    oilPrice, oilPriceHistory, currentMarketEvent,
     decisions, notifications, justification, drillingInProgress,
   ]);
 
@@ -259,7 +257,6 @@ export const GameProvider = ({ children }) => {
     if (snapshot.oilPrice !== undefined) setOilPrice(snapshot.oilPrice);
     if (snapshot.oilPriceHistory !== undefined) setOilPriceHistory(snapshot.oilPriceHistory);
     if (snapshot.currentMarketEvent !== undefined) setCurrentMarketEvent(snapshot.currentMarketEvent);
-    if (snapshot.financialHistory !== undefined) setFinancialHistory(snapshot.financialHistory);
     if (snapshot.decisions !== undefined) setDecisions(snapshot.decisions);
     if (snapshot.notifications !== undefined) setNotifications(snapshot.notifications);
     if (snapshot.justification !== undefined) setJustification(snapshot.justification);
@@ -331,8 +328,6 @@ export const GameProvider = ({ children }) => {
     currentMarketEvent, setCurrentMarketEvent,
 
     // Financial history
-    financialHistory, setFinancialHistory,
-
     // Decisions & notifications
     decisions, setDecisions,
     notifications, setNotifications,
