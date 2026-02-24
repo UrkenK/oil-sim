@@ -2,15 +2,15 @@ export const DECISION_GATES = {
   GATE_1: {
     name: 'FID 1: Proceed with Seismic Survey?',
     description: 'Decision to invest in seismic data acquisition',
-    cost: 6500000,
+    cost: 0, // dynamic — calculated from selected seismic package + contractor + geo multiplier
     risks: [
       { name: 'Exploration Risk', level: 'high', impact: 'Project failure if no oil found' },
-      { name: 'Capital Risk', level: 'medium', impact: '$6.5M non-recoverable investment' },
+      { name: 'Capital Risk', level: 'medium', impact: 'Non-recoverable seismic investment' },
       { name: 'Regulatory Risk', level: 'low', impact: 'Permit delays possible' }
     ],
     requirements: [
       { item: 'Geological area selected', key: 'geologicalType' },
-      { item: 'Budget allocation approved', key: 'budgetCheck', amount: 6500000 }
+      { item: 'Budget allocation approved', key: 'budgetCheck', amount: 'dynamic' }
     ],
     keyQuestions: [
       'Does the geological assessment support potential hydrocarbon presence?',
@@ -22,9 +22,9 @@ export const DECISION_GATES = {
   GATE_2: {
     name: 'FID 2: Drill Exploration Well?',
     description: 'Decision to drill first exploration well',
-    cost: 15000000,
+    cost: 0, // dynamic — calculated from geo multiplier + role bonuses
     risks: [
-      { name: 'Dry Hole Risk', level: 'high', impact: 'Total loss of $15M investment' },
+      { name: 'Dry Hole Risk', level: 'high', impact: 'Total loss of drilling investment' },
       { name: 'Technical Risk', level: 'medium', impact: 'Drilling complications or well control' },
       { name: 'Environmental Risk', level: 'medium', impact: 'Spill or environmental incident' }
     ],
@@ -32,7 +32,7 @@ export const DECISION_GATES = {
       { item: 'Seismic data acquired and interpreted', key: 'seismicComplete' },
       { item: 'Probability of success calculated', key: 'probabilityCalculated' },
       { item: 'Drilling permits secured', key: 'drillingPermit' },
-      { item: 'Budget sufficient for drilling', key: 'budgetCheck', amount: 15000000 }
+      { item: 'Budget sufficient for drilling', key: 'budgetCheck', amount: 'dynamic' }
     ],
     keyQuestions: [
       'What is the probability of finding commercial oil?',

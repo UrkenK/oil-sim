@@ -118,6 +118,26 @@ export const useGameActions = () => {
     return baseCost * (multiplierMap[costType] || 1.0);
   };
 
+  // Calculate dynamic gate cost (seismic for Gate 1, drilling for Gate 2)
+  const getGateDynamicCost = (gateId) => {
+    if (gateId === 'GATE_1') {
+      const pkg = selectedSeismicPkg ? SEISMIC_PACKAGES[selectedSeismicPkg] : null;
+      const ctr = selectedContractor ? SEISMIC_CONTRACTORS[selectedContractor] : null;
+      if (!pkg) return 0;
+      const seismicCost = applyGeoCost(pkg.cost + pkg.processingCost, 'seismic');
+      const contractorCost = ctr ? (ctr.mobilization + ctr.dailyRate * 35) : 0;
+      return seismicCost + contractorCost;
+    }
+    if (gateId === 'GATE_2') {
+      let cost = applyGeoCost(COSTS.explorationWell, 'explorationWell');
+      if (hasRole('engineer')) {
+        cost *= (1 - getRoleBonus('drillingCostReduction'));
+      }
+      return cost;
+    }
+    return 0;
+  };
+
   // Notifications & decisions
   const addNotification = (message, type = 'info') => {
     setNotifications(prev => [{
@@ -1144,7 +1164,10 @@ export const useGameActions = () => {
     const missing = [];
     for (const req of currentGate.requirements) {
       if (req.key === 'budgetCheck') {
-        if (budget < req.amount) missing.push(`Budget insufficient (need $${(req.amount/1e6).toFixed(1)}M)`);
+        const requiredAmount = req.amount === 'dynamic'
+          ? getGateDynamicCost(currentQuarter.gate)
+          : req.amount;
+        if (requiredAmount > 0 && budget < requiredAmount) missing.push(`Budget insufficient (need $${(requiredAmount/1e6).toFixed(1)}M)`);
       } else if (req.key === 'probabilityCalculated') {
         if (projectData.probabilityOfSuccess === 0) missing.push('Probability not calculated');
       } else if (req.key === 'preliminaryNPV') {
@@ -1474,13 +1497,17 @@ export const useGameActions = () => {
         if (!shouldProceed) return;
       }
 
-      if (currentGate.cost > 0) {
-        if (budget < currentGate.cost) {
+      // Calculate actual cost for this gate (dynamic for Gate 1 & 2)
+      const dynamicCost = getGateDynamicCost(currentQuarter.gate);
+      const gateCost = dynamicCost > 0 ? dynamicCost : currentGate.cost;
+
+      if (gateCost > 0) {
+        if (budget < gateCost) {
           addNotification('Insufficient budget for this decision!', 'error');
           return;
         }
-        setBudget(prev => prev - currentGate.cost);
-        setTotalSpent(prev => prev + currentGate.cost);
+        setBudget(prev => prev - gateCost);
+        setTotalSpent(prev => prev + gateCost);
       }
 
       // Gate-specific actions
@@ -1588,7 +1615,7 @@ export const useGameActions = () => {
       );
       logDecision(
         currentGate.name,
-        currentGate.cost,
+        gateCost,
         `Approved - Proceed (${approvalCount} team approvals)`,
         currentGate.risks.map(r => r.name).join(', '),
         approvedRoles
@@ -1778,6 +1805,7 @@ export const useGameActions = () => {
     // Geo helpers
     getGeoCharacteristics,
     applyGeoCost,
+    getGateDynamicCost,
     // Notifications
     addNotification,
     logDecision,

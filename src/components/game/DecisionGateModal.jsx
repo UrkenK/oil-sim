@@ -26,7 +26,7 @@ const DecisionGateModal = ({ gateEvaluation }) => {
     getRoleInsight, checkGateRoleRequirements, getRoleApprovalCount,
   } = useRoleHelpers();
   const {
-    applyGeoCost, calculateNPV, makeGateDecision, toggleRoleApproval,
+    applyGeoCost, getGateDynamicCost, calculateNPV, makeGateDecision, toggleRoleApproval,
     dispatchSetSelectedSeismicPkg, dispatchSetSelectedContractor,
     dispatchSetFeedStudy, dispatchSetSelectedDrillSite, dispatchSetJustification,
     dispatchSetFidSelection,
@@ -252,14 +252,19 @@ const DecisionGateModal = ({ gateEvaluation }) => {
       })()}
 
       {/* Investment Summary */}
-      {currentGate.cost > 0 && (
-        <div className="bg-slate-900/50 p-4 rounded-lg mb-4">
-          <div className="flex justify-between items-center">
-            <span className="font-semibold">Investment Required:</span>
-            <span className="text-2xl font-bold text-orange-400">${(currentGate.cost/1e6).toFixed(1)}M</span>
+      {(() => {
+        const dynamicCost = getGateDynamicCost(currentQuarter.gate);
+        const displayCost = dynamicCost > 0 ? dynamicCost : currentGate.cost;
+        if (displayCost <= 0) return null;
+        return (
+          <div className="bg-slate-900/50 p-4 rounded-lg mb-4">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold">Investment Required:</span>
+              <span className="text-2xl font-bold text-orange-400">${(displayCost/1e6).toFixed(1)}M</span>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Seismic Package & Contractor Selection for GATE_1 */}
       {currentQuarter.gate === "GATE_1" && (
